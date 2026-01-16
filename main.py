@@ -6,17 +6,27 @@ Implements AES symmetric encryption using the Fernet standard.
 
 from cryptography.fernet import Fernet
 
-# Generate a random 32-byte key for the session
 key = Fernet.generate_key()
 
-def encrypt_data(data):
+def encrypt_file(filename):
     """
-    Encrypt a raw string using the session key.
+    Reads a file from disk and encrypts its content.
     """
     cipher = Fernet(key)
-    # Fernet operates on bytes, so we encode the string
-    return cipher.encrypt(data.encode())
+
+    # Opening in standard read mode
+    with open(filename, "r") as f:
+        file_data = f.read()
+
+    encrypted_data = cipher.encrypt(file_data.encode())
+
+    # Save the encrypted output
+    with open(filename + ".enc", "w") as f:
+        f.write(encrypted_data.decode())
 
 if __name__ == "__main__":
-    print(f"Session Key: {key}")
-    print(encrypt_data("Secret Message"))
+    # Create a dummy file to test
+    with open("test.txt", "w") as f:
+        f.write("Confidential Data")
+
+    encrypt_file("test.txt")
