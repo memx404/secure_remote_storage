@@ -6,6 +6,7 @@ standard. It supports both string and binary file encryption, ensuring
 compatibility with various file formats.
 """
 
+import os
 from cryptography.fernet import Fernet
 
 # Generate a new symmetric key for the current execution session.
@@ -26,6 +27,7 @@ def encrypt_file(filename):
     cipher = Fernet(key)
 
     # Open file in binary read mode ('rb') to acquire raw bytes.
+    # This prevents encoding errors that occur with non-text files.
     with open(filename, "rb") as f:
         file_data = f.read()
 
@@ -43,9 +45,19 @@ def encrypt_file(filename):
 if __name__ == "__main__":
     print(f"Active Session Key: {key}")
 
-    # Initialize a test file to verify logic
-    test_file = "test_doc.txt"
-    with open(test_file, "w") as f:
+    # Define the directory for test artifacts to keep the root folder clean.
+    test_dir = "test_main"
+
+    # Create the directory if it does not already exist.
+    if not os.path.exists(test_dir):
+        os.makedirs(test_dir)
+
+    # Define the path for the dummy test file.
+    test_file_path = os.path.join(test_dir, "test_doc.txt")
+
+    # Initialize a test file to verify logic.
+    with open(test_file_path, "w") as f:
         f.write("Project documentation: Confidential.")
 
-    encrypt_file(test_file)
+    # Execute encryption on the test file.
+    encrypt_file(test_file_path)
