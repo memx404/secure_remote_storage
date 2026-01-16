@@ -1,0 +1,6 @@
+# Ignore generated test artifacts
+test_main/
+
+# Ignore Python cache files
+__pycache__/
+*.pyc
