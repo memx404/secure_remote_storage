@@ -1,6 +1,14 @@
-# Ignore generated test artifacts
-test_main/
+# --- Encryption keys ---
+keys/
+*.pem
+*.key
 
-# Ignore Python cache files
+# --- Temporary Test Data ---
+test_main/
+test_inputs/
+test_outputs/
+test_restored/
+
+# --- Python System Files ---
 __pycache__/
 *.pyc
