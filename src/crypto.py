@@ -43,3 +43,40 @@ def encrypt_file(filename, input_dir, output_dir, public_key):
         f.write(encrypted_key)
 
     return True
+
+def decrypt_file(filename, output_dir, restored_dir, private_key):
+    enc_file = os.path.join(output_dir, filename + ".enc")
+    enc_key = os.path.join(output_dir, filename + ".key.enc")
+
+    if not os.path.exists(enc_file) or not os.path.exists(enc_key):
+        raise FileNotFoundError("Encrypted artifacts missing.")
+
+    # 1. Unlock the Session Key
+    with open(enc_key, "rb") as f:
+        encrypted_session_key = f.read()
+
+    # Use RSA Private Key to decrypt the AES session key
+    session_key = private_key.decrypt(
+        encrypted_session_key,
+        padding.OAEP(
+            mgf=padding.MGF1(algorithm=hashes.SHA256()),
+            algorithm=hashes.SHA256(),
+            label=None
+        )
+    )
+
+    # 2. Decrypt the File Data
+    cipher = Fernet(session_key)
+    with open(enc_file, "rb") as f:
+        encrypted_data = f.read()
+
+    decrypted_data = cipher.decrypt(encrypted_data)
+
+    # 3. Save the Restored File
+    if not os.path.exists(restored_dir):
+        os.makedirs(restored_dir)
+
+    with open(os.path.join(restored_dir, filename), "wb") as f:
+        f.write(decrypted_data)
+
+    return True
