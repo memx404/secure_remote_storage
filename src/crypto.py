@@ -1,3 +1,10 @@
+"""
+Cryptographic Engine Module.
+
+Implements Hybrid Encryption (AES-256 + RSA-2048) logic.
+Combines the speed of symmetric encryption with the security of asymmetric key exchange.
+"""
+
 import os
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives.asymmetric import padding
