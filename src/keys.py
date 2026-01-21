@@ -1,3 +1,10 @@
+"""
+Key Management Module.
+
+Handles the generation, storage, and retrieval of RSA cryptographic identities.
+Ensures that private keys are always stored in an encrypted format.
+"""
+
 import os
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import serialization
