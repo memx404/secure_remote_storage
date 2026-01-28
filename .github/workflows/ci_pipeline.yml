@@ -1,4 +1,4 @@
-name: Daily Check
+name: Code Flow Check
 
 on:
   push:
@@ -21,5 +21,6 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
-    - name: Execute Main Script
-      run: python main.py
+    - name: Run Unit Test Suite
+      run: |
+        pytest tests/ -v
