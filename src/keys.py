@@ -9,7 +9,9 @@ import os
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import serialization
 
+
 def generate_key_pair(key_dir="keys", password=b"student_password_123"):
+
     # Create keys folder to save public and private keys
     if not os.path.exists(key_dir):
         os.makedirs(key_dir)
@@ -50,13 +52,15 @@ def generate_key_pair(key_dir="keys", password=b"student_password_123"):
     with open(public_path, "wb") as f:
         f.write(pub_pem)
 
-    print(f"New identity generated in {key_dir}")   
+    print(f"New identity generated in {key_dir}")
+
 
 def load_private_key(key_dir="keys", password=b"student_password_123"):
     # Load the encrypted Private Key from disk
     path = os.path.join(key_dir, "private_key.pem")
     with open(path, "rb") as f:
         return serialization.load_pem_private_key(f.read(), password=password)
+
 
 def load_public_key(key_dir="keys"):
     # Load the Public Key from disk

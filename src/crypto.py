@@ -10,7 +10,9 @@ from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives import hashes
 
+
 def encrypt_file(filename, input_dir, output_dir, public_key):
+    
     input_path = os.path.join(input_dir, filename)
     if not os.path.exists(input_path):
         raise FileNotFoundError(f"Input file {filename} not found.")
@@ -50,6 +52,7 @@ def encrypt_file(filename, input_dir, output_dir, public_key):
         f.write(encrypted_key)
 
     return True
+
 
 def decrypt_file(filename, output_dir, restored_dir, private_key):
     enc_file = os.path.join(output_dir, filename + ".enc")
