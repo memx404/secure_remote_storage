@@ -1,2 +1,2 @@
-cryptography==41.0.
+cryptography==41.0.3
 pytest
