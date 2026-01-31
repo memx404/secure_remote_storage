@@ -12,3 +12,4 @@ test_restored/
 # --- Python System Files ---
 __pycache__/
 *.pyc
+.vscode
