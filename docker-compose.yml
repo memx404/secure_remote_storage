@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  server:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    container_name: secure-storage-server
+    
+    # Port Mapping: Host Port 5000 -> Container Port 5000
+    ports:
+      - "5000:5000"
+    
+    # Volume Mapping: Persist uploaded files to local disk
+    volumes:
+      - ./server/storage:/app/server/storage
+    
+    # Environment Configuration
+    environment:
+      - FLASK_DEBUG=1
+    
+    # Internal Network Isolation
+    networks:
+      - secure-net
+
+networks:
+  secure-net:
+    driver: bridge
