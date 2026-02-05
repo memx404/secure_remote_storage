@@ -1,57 +1,58 @@
-"""
-Test Suite for Network Module
-=============================
-Uses 'requests_mock' to simulate server responses.
-This allows us to test client logic (success/fail handling)
-without running a real Flask server.
-"""
-
-import os
-import pytest
-import requests_mock
+import unittest
+from unittest.mock import patch, MagicMock
 from src import network
 
-# Mock Server URL (Must match src/network.py)
-BASE_URL = "http://127.0.0.1:5000"
+class TestNetwork(unittest.TestCase):
 
-def test_check_health_success():
-    """Verify check_server_health returns True on 200 OK."""
-    with requests_mock.Mocker() as m:
-        # Fake a 200 OK response from /health
-        m.get(f"{BASE_URL}/health", status_code=200)
-        assert network.check_server_health() is True
+    @patch('src.network.requests.get')
+    def test_check_health_success(self, mock_get):
+        """Test that server returns True when status is 200"""
+        # Mock a successful response
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_get.return_value = mock_response
 
-def test_check_health_failure():
-    """Verify check_server_health returns False on 500 Error."""
-    with requests_mock.Mocker() as m:
-        # Fake a 500 Server Error
-        m.get(f"{BASE_URL}/health", status_code=500)
-        assert network.check_server_health() is False
+        # FIX 1: Use the correct function name 'check_server_status'
+        result = network.check_server_status()
+        self.assertTrue(result)
 
-def test_upload_success(tmp_path):
-    """Verify upload_file handles 201 Created correctly."""
-    # Create a dummy file to upload
-    dummy_file = tmp_path / "test.txt"
-    dummy_file.write_text("Hello World")
-    
-    with requests_mock.Mocker() as m:
-        # Fake a successful upload response
-        m.post(f"{BASE_URL}/upload", status_code=201)
+    @patch('src.network.requests.get')
+    def test_check_health_failure(self, mock_get):
+        """Test that server returns False when status is 500"""
+        mock_response = MagicMock()
+        mock_response.status_code = 500
+        mock_get.return_value = mock_response
+
+        # FIX 1: Use the correct function name 'check_server_status'
+        result = network.check_server_status()
+        self.assertFalse(result)
+
+    @patch('src.network.requests.post')
+    def test_upload_success(self, mock_post):
+        """Test successful file upload"""
+        mock_response = MagicMock()
+        # FIX 2: Accept 201 (Created) as a success code too
+        mock_response.status_code = 201 
+        mock_post.return_value = mock_response
+
+        # FIX 3: Pass BOTH arguments: filename AND file_data
+        result = network.upload_file("test.txt", b"dummy_encrypted_data")
         
-        result = network.upload_file(str(dummy_file))
-        assert result is True
+        self.assertIsNotNone(result)
+        self.assertEqual(result.status_code, 201)
 
-def test_download_success(tmp_path):
-    """Verify download_file saves content correctly."""
-    with requests_mock.Mocker() as m:
-        # Fake the file content coming from the server
-        fake_content = b"Downloaded Data"
-        m.get(f"{BASE_URL}/download/test.txt", content=fake_content, status_code=200)
+    @patch('src.network.requests.get')
+    def test_download_success(self, mock_get):
+        """Test successful file download"""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.content = b"encrypted_content"
+        mock_get.return_value = mock_response
+
+        # FIX 4: Pass ONLY the filename (1 argument)
+        result = network.download_file("test.txt")
         
-        # Download to the temp directory
-        saved_path = network.download_file("test.txt", str(tmp_path))
-        
-        # Check if file exists and has correct content
-        assert os.path.exists(saved_path)
-        with open(saved_path, "rb") as f:
-            assert f.read() == fake_content
+        self.assertEqual(result, b"encrypted_content")
+
+if __name__ == '__main__':
+    unittest.main()
