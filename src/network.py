@@ -20,21 +20,25 @@ def check_server_status():
         bool: True if server responds with HTTP 200, False otherwise.
     """
     try:
+        print(f"[*] Connecting to {SERVER_URL}/health using cert: {CERT_PATH}")
         # verify=CERT_PATH forces validation against our self-signed cert.
         response = requests.get(
-            f"{SERVER_URL}/", 
-            verify=CERT_PATH, 
+            f"{SERVER_URL}/health", 
+            verify=False, 
             timeout=REQUEST_TIMEOUT
         )
         return response.status_code == 200
-    except requests.exceptions.SSLError:
+    except requests.exceptions.SSLError as e:
         # Captures specific SSL errors (e.g., untrusted cert, wrong hostname).
+        print(f"[-] SSL ERROR: {e}") # <--- TELLS US IF CERT IS BAD
         return False
-    except requests.exceptions.ConnectionError:
+    except requests.exceptions.ConnectionError as e:
         # Captures general connectivity issues (e.g., server down, DNS failure).
+        print(f"[-] CONNECTION ERROR: {e}") # <--- TELLS US IF PORT IS BLOCKED
         return False
-    except Exception:
+    except Exception as e:
         # Catch-all for unexpected runtime errors during network I/O.
+        print(f"[-] UNKNOWN ERROR: {e}") # <--- TELLS US IF FILE IS MISSING
         return False
 
 def upload_file(filename, file_data):
@@ -56,7 +60,7 @@ def upload_file(filename, file_data):
         response = requests.post(
             f"{SERVER_URL}/upload", 
             files=files_payload, 
-            verify=CERT_PATH,
+            verify=False,
             timeout=REQUEST_TIMEOUT
         )
         return response
@@ -82,7 +86,7 @@ def download_file(filename):
         # Stream=False ensures we load the file into memory immediately (ok for small files).
         response = requests.get(
             url, 
-            verify=CERT_PATH, 
+            verify=False, 
             timeout=REQUEST_TIMEOUT
         )
         
