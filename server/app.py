@@ -13,6 +13,10 @@ def allowed_file(filename):
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
 
+@app.route('/')
+def home():
+    return "Secure Storage Server is Online!", 200
+
 @app.route('/health', methods=['GET'])
 def health():
     return jsonify({"status": "online"}), 200
