@@ -40,10 +40,14 @@ def perform_upload(file_path):
         print(f"[*] Uploading encrypted file to server...")
         res = network.upload_file(filename, file_data)
         
-        if res and res.status_code == 200:
+        if res and res.status_code in [200, 201]:
             print(f"[+] Success! Server stored file as: {filename}")
+        
+        elif res:
+            print(f"[-] Upload Failed. Server Code: {res.status_code}")
+            print(f"[-] Server Message: {res.text}")
         else:
-            print("[-] Upload Failed. Check server logs.")
+            print("[-] Upload Failed: No response from network module.")
             
     except Exception as e:
         print(f"[-] Error: {e}")
