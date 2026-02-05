@@ -1,70 +1,84 @@
 # Secure Remote Storage (SRS)
 
-A secure, CLI-based file storage system implementing hybrid encryption (AES-256 + RSA-2048) and a client-server architecture. Developed for the ST6051CEM Practical Cryptography module.
+A secure, CLI-based file storage system implementing hybrid encryption (AES-256 + RSA-2048) and a secure client-server architecture. Developed for the ST6051CEM Practical Cryptography module.
 
 ## 🚀 Features
 * **Hybrid Encryption:** AES-256 (CBC) for data confidentiality and RSA-2048 (OAEP) for secure key exchange.
+* **Transport Security:** Full HTTPS/TLS encryption using Nginx reverse proxy.
 * **Secure Deletion:** Anti-forensic wiping of local files after encryption.
 * **Networked Storage:** Flask-based REST API server for remote file management.
-* **Containerized:** Full Docker support for portable deployment.
+* **Containerized:** Full Docker support for production-grade deployment.
 * **Input Sanitization:** Protects against directory traversal and malicious filenames.
 
 ## 🛠️ Installation & Setup
 
 ### Prerequisites
 * Python 3.10+
-* Docker Desktop (Optional, for containerized run)
+* Docker Desktop (Recommended for HTTPS support)
+* OpenSSL (Handled via Python dependencies)
 
-### Option 1: Manual Setup (Local Python)
-Use this for development and debugging.
+### 🔐 Security Setup (Required)
+Before running the application, you must generate the local SSL certificates. This acts as a private "Certificate Authority" for the secure tunnel.
 
-1.  **Install Dependencies:**
+1.  **Install Crypto Utilities:**
     ```bash
     pip install -r requirements.txt
     ```
-2.  **Start the Server:**
-    Open a terminal and run:
+2.  **Generate Certificates:**
     ```bash
-    python -m server.app
+    python generate_certs.py
     ```
-3.  **Run the Client:**
-    Open a second terminal and run:
-    ```bash
-    python main.py
-    ```
+    *Output: Creates `nginx/certs/server.key` and `server.crt`.*
 
-### Option 2: Docker Deployment (Recommended)
-Use this to simulate a production environment.
+---
+
+### 🐳 Deployment (Docker)
+This is the recommended way to run the system as it includes the Nginx Security Proxy.
 
 1.  **Start Services:**
     ```bash
     docker-compose up --build -d
     ```
 2.  **Verify Access:**
-    The API will be available at: `http://localhost:5000`
-    *Note: Uploaded files are persisted in `server/storage/`.*
+    * **API:** `https://localhost` (Note the **HTTPS**)
+    * **Note:** Your browser may warn about a "Self-Signed Certificate". This is normal for a local development environment.
 3.  **Stop Services:**
     ```bash
     docker-compose down
     ```
 
+### 🐍 Manual Setup (Dev Only)
+*Note: The client is configured for HTTPS by default. Running manually requires changing `src/config.py` back to HTTP.*
+
+1.  **Start Server:** `python -m server.app`
+2.  **Start Client:** `python main.py`
+
+---
+
 ## 💻 Usage Guide
 
 The application runs an interactive shell (`SRS-Shell`).
 
-### key Commands
+### Key Commands
 | Command | Description |
 | :--- | :--- |
-| `status` | Checks if the remote server is online. |
+| `status` | Checks if the secure server (HTTPS) is online. |
 | `generate` | Creates a new RSA Identity (Public/Private keys). |
 | `encrypt <file>` | Encrypts a file using Hybrid Encryption. |
-| `upload <file>` | Uploads an encrypted file to the server. |
-| `download <name>` | Downloads a file from the server. |
+| `upload <file>` | Uploads an encrypted file to the secure vault. |
+| `download <name>` | Downloads a file from the vault. |
 | `decrypt -f <file> -k <key>` | Decrypts a file using your private key. |
 
 ### Example Workflow
 ```text
+SRS-Shell> status
+[+] System Online: Secure Connection Established (HTTPS).
+
 SRS-Shell> generate
-SRS-Shell> encrypt "my_secret.pdf"
-SRS-Shell> upload "my_secret.pdf.enc"
-SRS-Shell> download "my_secret.pdf.enc"
+[+] Identity Established: Keys saved to 'keys'
+
+SRS-Shell> encrypt "confidential_report.pdf"
+[+] Encryption Successful: confidential_report.pdf.enc created.
+
+SRS-Shell> upload "confidential_report.pdf.enc"
+[+] Upload Completed: Server accepted 'confidential_report.pdf.enc'.
