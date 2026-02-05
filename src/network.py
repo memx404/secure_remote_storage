@@ -1,92 +1,100 @@
 import requests
 import os
+# Note: Ensure 'src.settings' matches your actual config file name (sometimes it is src.config)
 from src.settings import SERVER_URL, CERT_PATH, REQUEST_TIMEOUT
 
 """
-Network Client Module
----------------------
-Encapsulates HTTP methods for communicating with the Secure Remote Storage API.
-enforces SSL verification using the locally generated certificate.
+Network Interface Module
+------------------------
+Encapsulates HTTP transport logic for the Secure Remote Storage API.
+This module enforces Transport Layer Security (TLS) by verifying the 
+server's SSL certificate against the local trusted authority.
 """
 
 def check_server_status():
     """
-    Performs a health check on the remote server.
+    Performs a heartbeat check against the remote server's health endpoint.
 
-    Sends a GET request to the root endpoint to verify connectivity
-    and SSL handshake validation.
+    This function serves two purposes:
+    1. Verifies network connectivity (TCP/IP).
+    2. Validates the SSL Handshake to ensure the server identity is trusted.
 
     Returns:
-        bool: True if server responds with HTTP 200, False otherwise.
+        bool: True if the server is online and the connection is secure (HTTP 200).
     """
     try:
-        print(f"[*] Connecting to {SERVER_URL}/health using cert: {CERT_PATH}")
-        # verify=CERT_PATH forces validation against our self-signed cert.
+        print(f"[*] Initiating secure handshake with {SERVER_URL}/health...")
+        
+        # Request Configuration:
+        # - verify=CERT_PATH: Performs strict SSL validation using our local certificate.
+        #   This prevents Man-in-the-Middle (MITM) attacks.
+        # - timeout: Prevents the client from hanging indefinitely if the server is unresponsive.
         response = requests.get(
             f"{SERVER_URL}/health", 
-            verify=False, 
+            verify=CERT_PATH, 
             timeout=REQUEST_TIMEOUT
         )
         return response.status_code == 200
+        
     except requests.exceptions.SSLError as e:
-        # Captures specific SSL errors (e.g., untrusted cert, wrong hostname).
-        print(f"[-] SSL ERROR: {e}") # <--- TELLS US IF CERT IS BAD
+        # Catch-all for TLS failures (e.g., Expired Cert, Hostname Mismatch, Untrusted CA).
+        print(f"[-] FATAL: SSL Handshake Failed. The server identity could not be verified.\n    Details: {e}")
         return False
     except requests.exceptions.ConnectionError as e:
-        # Captures general connectivity issues (e.g., server down, DNS failure).
-        print(f"[-] CONNECTION ERROR: {e}") # <--- TELLS US IF PORT IS BLOCKED
+        # Handles TCP level failures (e.g., Server is down, Firewall blocking port 443).
+        print(f"[-] ERROR: Connection Refused. Ensure Docker containers are running.\n    Details: {e}")
         return False
     except Exception as e:
-        # Catch-all for unexpected runtime errors during network I/O.
-        print(f"[-] UNKNOWN ERROR: {e}") # <--- TELLS US IF FILE IS MISSING
+        # Safety net for unexpected runtime exceptions (e.g., File I/O errors).
+        print(f"[-] ERROR: Unexpected network exception.\n    Details: {e}")
         return False
 
 def upload_file(filename, file_data):
     """
-    Transmits an encrypted binary file to the storage server.
+    Transmits an encrypted binary payload to the secure storage vault.
 
     Args:
-        filename (str): The name of the file to be stored on the server.
-        file_data (bytes): The raw binary content of the encrypted file.
+        filename (str): The identifier for the file artifact.
+        file_data (bytes): The AES-encrypted binary content.
 
     Returns:
-        requests.Response: The HTTP response object if successful.
-        None: If the transfer fails due to network or SSL errors.
+        requests.Response: The raw response object from the API, or None on failure.
     """
     try:
-        # Multipart-encoded file payload
+        # Prepare Multipart/Form-Data payload.
+        # This format is required for reliable binary file transmission over HTTP.
         files_payload = {'file': (filename, file_data)}
         
         response = requests.post(
             f"{SERVER_URL}/upload", 
             files=files_payload, 
-            verify=False,
+            verify=CERT_PATH,  # Enforce encryption and identity check
             timeout=REQUEST_TIMEOUT
         )
         return response
     except Exception as e:
-        # Logs the specific exception message to console for debugging context.
-        print(f"[-] Network Exception during upload: {e}")
+        print(f"[-] Upload Operation Failed: {e}")
         return None
 
 def download_file(filename):
     """
-    Retrieves a specific file from the remote storage.
+    Retrieves an encrypted artifact from the secure storage vault.
 
     Args:
         filename (str): The identifier of the file to retrieve.
 
     Returns:
-        bytes: The binary content of the file if found.
-        None: If the file does not exist or network error occurs.
+        bytes: The raw encrypted content if successful.
+        None: If the file is missing (404) or network fails.
     """
     try:
         url = f"{SERVER_URL}/download/{filename}"
         
-        # Stream=False ensures we load the file into memory immediately (ok for small files).
+        # Sends a Secure GET request.
+        # Note: Large file streaming is disabled here for simplicity (content loaded to RAM).
         response = requests.get(
             url, 
-            verify=False, 
+            verify=CERT_PATH, 
             timeout=REQUEST_TIMEOUT
         )
         
@@ -95,5 +103,5 @@ def download_file(filename):
         else:
             return None
     except Exception as e:
-        print(f"[-] Network Exception during download: {e}")
+        print(f"[-] Download Operation Failed: {e}")
         return None
