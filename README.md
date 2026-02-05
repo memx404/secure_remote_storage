@@ -28,7 +28,7 @@ Before running the application, you must generate the local SSL certificates. Th
     ```bash
     python generate_certs.py
     ```
-    *Output: Creates `nginx/certs/server.key` and `server.crt`.*
+    *Output: Creates `nginx/certs/server.key` and `server.crt` with Subject Alternative Name (SAN).*
 
 ---
 
@@ -40,18 +40,19 @@ This is the recommended way to run the system as it includes the Nginx Security 
     docker-compose up --build -d
     ```
 2.  **Verify Access:**
-    * **API:** `https://localhost` (Note the **HTTPS**)
-    * **Note:** Your browser may warn about a "Self-Signed Certificate". This is normal for a local development environment.
+    * Open browser to: `https://localhost`
+    * **Note:** Accept the "Self-Signed Certificate" warning (Advanced -> Proceed).
+    * **Success:** You will see the text: `Secure Storage Server is Online!`
 3.  **Stop Services:**
     ```bash
     docker-compose down
     ```
 
-### 🐍 Manual Setup (Dev Only)
-*Note: The client is configured for HTTPS by default. Running manually requires changing `src/config.py` back to HTTP.*
+### 🐍 Manual Setup (No Docker)
+*Only use this if Docker is unavailable. You must disable HTTPS in `src/settings.py` first.*
 
-1.  **Start Server:** `python -m server.app`
-2.  **Start Client:** `python main.py`
+1.  **Start Server (Terminal 1):** `python -m server.app`
+2.  **Start Client (Terminal 2):** `python main.py`
 
 ---
 
@@ -72,13 +73,23 @@ The application runs an interactive shell (`SRS-Shell`).
 ### Example Workflow
 ```text
 SRS-Shell> status
-[+] System Online: Secure Connection Established (HTTPS).
+[+] Server is ONLINE and Secure (HTTPS).
 
 SRS-Shell> generate
-[+] Identity Established: Keys saved to 'keys'
+[+] Identity generated successfully.
 
 SRS-Shell> encrypt "confidential_report.pdf"
-[+] Encryption Successful: confidential_report.pdf.enc created.
+[+] Success. Encrypted to: C:\...\confidential_report.pdf.enc
 
 SRS-Shell> upload "confidential_report.pdf.enc"
-[+] Upload Completed: Server accepted 'confidential_report.pdf.enc'.
+[+] Success! Server stored file as: confidential_report.pdf.enc
+
+## 🔧 Troubleshooting
+# 1. Stop containers
+docker-compose down
+
+# 2. Rebuild Nginx without cache (Forces new cert copy)
+docker-compose build --no-cache nginx
+
+# 3. Start services
+docker-compose up -d
