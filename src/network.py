@@ -12,6 +12,7 @@ server's SSL certificate against the local trusted authority.
 """
 
 def check_server_status():
+    
     """
     Performs a heartbeat check against the remote server's health endpoint.
 
@@ -22,6 +23,12 @@ def check_server_status():
     Returns:
         bool: True if the server is online and the connection is secure (HTTP 200).
     """
+
+    if not os.path.exists(CERT_PATH):
+        print(f"[-] Warning: SSL Certificate not found at '{CERT_PATH}'.")
+        print("    Server is assumed OFFLINE (or first-run setup needed).")
+        return False
+    
     try:
         print(f"[*] Initiating secure handshake with {SERVER_URL}/health...")
         
