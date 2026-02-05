@@ -1,28 +1,40 @@
-version: '3.8'
-
 services:
+  # Service: Backend Application
+  # Role: Handles business logic and file encryption/storage.
+  # Security: Not exposed publicly; reachable only via the internal network.
   server:
+    image: srs-backend:latest
+    container_name: srs-backend-container
     build:
       context: .
       dockerfile: server/Dockerfile
-    container_name: secure-storage-server
-    
-    # Port Mapping: Host Port 5000 -> Container Port 5000
-    ports:
-      - "5000:5000"
-    
-    # Volume Mapping: Persist uploaded files to local disk
+    expose:
+      - "5000"
     volumes:
+      # Bind Mount: Maps local storage directory to container storage.
+      # Enables data persistence and host-side verification.
       - ./server/storage:/app/server/storage
-    
-    # Environment Configuration
-    environment:
-      - FLASK_DEBUG=1
-    
-    # Internal Network Isolation
     networks:
-      - secure-net
+      - srs-secure-net
 
+  # Service: Secure Proxy
+  # Role: Handles SSL encryption and request forwarding.
+  # Security: Exposed to host machine on port 443 (HTTPS).
+  nginx:
+    image: srs-proxy:latest
+    container_name: srs-proxy-container
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    ports:
+      - "443:443"
+    depends_on:
+      - server
+    networks:
+      - srs-secure-net
+
+# Network Configuration
+# Defines an isolated bridge network for inter-container communication.
 networks:
-  secure-net:
-    driver: bridge
+  srs-secure-net:
+    name: srs-internal-network
