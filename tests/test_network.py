@@ -1,31 +1,53 @@
 import unittest
+import os
+import shutil
 from unittest.mock import patch, MagicMock
 from src import network
 
 class TestNetwork(unittest.TestCase):
 
-    @patch('src.network.os.path.exists') 
-    @patch('src.network.requests.get')
-    def test_check_health_success(self, mock_get, mock_exists):
-        """Test that server returns True when status is 200"""
-        # 1. Pretend the certificate file exists
-        mock_exists.return_value = True 
+    def setUp(self):
+        """
+        Run BEFORE every test. 
+        Creates a dummy certificate file so the 'Defensive Check' passes.
+        """
+        self.cert_dir = "nginx/certs"
+        self.cert_path = os.path.join(self.cert_dir, "server.crt")
         
-        # 2. Mock a successful network response
+        # Ensure directory exists
+        os.makedirs(self.cert_dir, exist_ok=True)
+        
+        # Create a dummy file (content doesn't matter because we mock requests)
+        with open(self.cert_path, 'w') as f:
+            f.write("DUMMY CERTIFICATE")
+
+    def tearDown(self):
+        """
+        Run AFTER every test.
+        Cleans up the dummy file to leave the system clean.
+        """
+        if os.path.exists(self.cert_path):
+            os.remove(self.cert_path)
+        # Try to remove the directory if it's empty
+        try:
+            os.rmdir(self.cert_dir)
+        except OSError:
+            pass
+
+    @patch('src.network.requests.get')
+    def test_check_health_success(self, mock_get):
+        """Test that server returns True when status is 200"""
+        # The file exists (thanks to setUp), so the code proceeds to network call
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_get.return_value = mock_response
 
-        # 3. Run the test
         result = network.check_server_status()
         self.assertTrue(result)
 
-    @patch('src.network.os.path.exists') # MOCK FILE SYSTEM
     @patch('src.network.requests.get')
-    def test_check_health_failure(self, mock_get, mock_exists):
+    def test_check_health_failure(self, mock_get):
         """Test that server returns False when status is 500"""
-        mock_exists.return_value = True # Pretend file exists
-        
         mock_response = MagicMock()
         mock_response.status_code = 500
         mock_get.return_value = mock_response
