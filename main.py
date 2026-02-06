@@ -109,7 +109,7 @@ def perform_decrypt(enc_file, key_file):
 # --- INTERACTIVE SHELL ---
 def run_interactive_shell():
     print("=" * 60)
-    print("Secure Remote Storage (CLI v3.0 - HTTPS Enabled)".center(60))
+    print("Secure Remote Storage (HTTPS Enabled)".center(60))
     print("Type 'help' to list commands and 'quit' to exit.".center(60))
     print("=" * 60)
 
@@ -130,13 +130,13 @@ def run_interactive_shell():
             
             elif command == "help":
                 print("\nAvailable Commands:")
-                print("  status              - Check HTTPS connection")
-                print("  generate            - Create RSA keys")
-                print("  encrypt <file>      - Encrypt local file")
-                print("  upload <file>       - Upload encrypted file")
-                print("  download <name>     - Download file")
+                print("  status                     - Check HTTPS connection")
+                print("  generate                   - Create RSA keys")
+                print("  encrypt <file>             - Encrypt local file")
+                print("  upload <file>              - Upload encrypted file")
+                print("  download <name>            - Download file")
                 print("  decrypt -f <file> -k <key> - Decrypt file")
-                print("  quit                - Exit")
+                print("  quit                       - Exit")
 
             elif command == "status": perform_check_server()
             elif command == "generate": perform_generate()

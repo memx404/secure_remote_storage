@@ -4,8 +4,6 @@ from src import network
 
 class TestNetwork(unittest.TestCase):
 
-    # --- FIX: Patch 'os.path.exists' GLOBALLY to always return True ---
-    # This tricks the "Defensive Check" without needing real files.
     @patch('os.path.exists', return_value=True)
     @patch('src.network.requests.get')
     def test_check_health_success(self, mock_get, mock_exists):
@@ -17,7 +15,6 @@ class TestNetwork(unittest.TestCase):
         mock_get.return_value = mock_response
 
         # 2. Run the code
-        # Note: os.path.exists() returns True automatically now!
         result = network.check_server_status()
         
         # 3. Verify
