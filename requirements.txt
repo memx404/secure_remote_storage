@@ -5,3 +5,7 @@ Flask==3.0.0
 requests==2.31.0
 requests-mock
 pyOpenSSL>=23.0.0
+pymongo
+argon2-cffi
+flask-cors
+gunicorn
