@@ -1,15 +1,37 @@
-# --- Encryption keys ---
-keys/
-*.pem
-*.key
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
 
-# --- Temporary Test Data ---
+# Environment
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+
+# OS / IDE
+.vscode/
+.idea/
+.DS_Store
+
+# Runtime storage (DO NOT COMMIT)
+secure_storage/
+encrypted_files/
+uploads/
+downloads/
+
+# Certificates & Keys (CRITICAL)
+*.key
+*.pem
+*.crt
+*.p12
+*.pfx
+nginx/certs/
+
+# Temporary Test Data
 test_main/
 test_inputs/
 test_outputs/
 test_restored/
-
-# --- Python System Files ---
-__pycache__/
-*.pyc
-.vscode
