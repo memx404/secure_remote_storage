@@ -1,12 +1,13 @@
 import os
 
-# CONFIGURATION SETTINGS
-# ----------------------
-# Central place for project constants.
+# =========================
+# Core runtime configuration
+# =========================
 
-SRS_STORAGE_DIR = os.getenv('SRS_STORAGE', 'secure_storage')
-SRS_DB_NAME = "srs_db"
-SRS_SERVER_URL = "https://localhost:443"
+SERVER_URL = os.getenv("SRS_SERVER_URL", "https://localhost")
 
-# Paths for Nginx Certificates (used by client validation)
-CERT_PATH = os.path.join("nginx", "certs", "server.crt")
+CERT_PATH = os.getenv("SRS_CERT_PATH", "nginx/certs/server.crt")
+
+REQUEST_TIMEOUT = float(os.getenv("SRS_REQUEST_TIMEOUT", "10"))
+
+SRS_STORAGE = os.getenv("SRS_STORAGE", "secure_storage")
