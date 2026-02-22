@@ -1,40 +1,72 @@
+version: '3.8'
+
 services:
-  # Service: Backend Application
-  # Role: Handles business logic and file encryption/storage.
-  # Security: Not exposed publicly; reachable only via the internal network.
-  server:
-    image: srs-backend:latest
-    container_name: srs-backend-container
-    build:
+  # 1. DATABASE SERVICE
+  mongo:
+    image: mongo:latest
+    container_name: srs_mongo
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: securepassword123
+    ports:
+      - "27017:27017"     
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - srs_network
+
+  # 1B. MongoDB WEB GUI
+  mongo-express:
+    image: mongo-express:latest
+    container_name: srs_mongo_express
+    depends_on:
+      - mongo
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: admin
+      ME_CONFIG_MONGODB_ADMINPASSWORD: securepassword123
+      ME_CONFIG_MONGODB_SERVER: mongo
+      ME_CONFIG_BASICAUTH_USERNAME: user123
+      ME_CONFIG_BASICAUTH_PASSWORD: userpass123
+      ME_CONFIG_SITE_BASEURL: /
+    ports:
+      - "8081:8081"      
+    networks:
+      - srs_network
+
+  # 2. FLASK SERVER
+  web:
+    build: 
       context: .
       dockerfile: server/Dockerfile
-    expose:
-      - "5000"
+    container_name: srs_server
+    depends_on:
+      - mongo
+    environment:
+      - MONGO_INITDB_ROOT_PASSWORD=securepassword123
+      - SRS_STORAGE=/app/secure_storage
     volumes:
-      # Bind Mount: Maps local storage directory to container storage.
-      # Enables data persistence and host-side verification.
-      - ./server/storage:/app/server/storage
+      - ./secure_storage:/app/secure_storage
+      - ./keys:/app/keys
     networks:
-      - srs-secure-net
+      - srs_network
 
-  # Service: Secure Proxy
-  # Role: Handles SSL encryption and request forwarding.
-  # Security: Exposed to host machine on port 443 (HTTPS).
+  # 3. NGINX PROXY
   nginx:
-    image: srs-proxy:latest
-    container_name: srs-proxy-container
-    build:
-      context: ./nginx
-      dockerfile: Dockerfile
+    image: nginx:latest
+    container_name: srs_proxy
     ports:
       - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf
+      - ./nginx/certs:/etc/nginx/certs
     depends_on:
-      - server
+      - web
     networks:
-      - srs-secure-net
+      - srs_network
 
-# Network Configuration
-# Defines an isolated bridge network for inter-container communication.
 networks:
-  srs-secure-net:
-    name: srs-internal-network
+  srs_network:
+    driver: bridge
+
+volumes:
+  mongo_data:
