@@ -1,20 +1,12 @@
 import os
 
-"""
-Configuration Constants
------------------------
-Defines environment-specific variables for the client application.
-"""
+# CONFIGURATION SETTINGS
+# ----------------------
+# Central place for project constants.
 
-# Server Endpoint
-# Uses HTTPS protocol (Port 443) to ensure encrypted transport.
-SERVER_URL = "https://localhost:443"
+SRS_STORAGE_DIR = os.getenv('SRS_STORAGE', 'secure_storage')
+SRS_DB_NAME = "srs_db"
+SRS_SERVER_URL = "https://localhost:443"
 
-# SSL Verification
-# Path to the Certificate Authority (CA) bundle or self-signed certificate.
-# Required by the 'requests' library to validate the server's identity.
+# Paths for Nginx Certificates (used by client validation)
 CERT_PATH = os.path.join("nginx", "certs", "server.crt")
-
-# Request Settings
-# Timeout in seconds to prevent hanging connections.
-REQUEST_TIMEOUT = 10
