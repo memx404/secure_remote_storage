@@ -17,20 +17,30 @@ BASE_STORAGE = os.getenv("SRS_STORAGE", "secure_storage")
 KEYSTORE_DIR = os.path.join(BASE_STORAGE, "keystore")
 os.makedirs(KEYSTORE_DIR, exist_ok=True)
 
+
 db = None
 try:
+    mongo_user = os.getenv("MONGO_USER", "admin")
     mongo_pass = os.getenv("MONGO_INITDB_ROOT_PASSWORD", "securepassword123")
-    client = MongoClient(f"mongodb://admin:{mongo_pass}@mongo:27017/")
-    db = client["srs_db"]
+    mongo_host = os.getenv("MONGO_HOST", "mongo")        # Docker default
+    mongo_port = os.getenv("MONGO_PORT", "27017")
+    mongo_dbname = os.getenv("MONGO_DB", "srs_db")
 
-    # ✅ Indexes for performance + clean data model
+    uri = f"mongodb://{mongo_user}:{mongo_pass}@{mongo_host}:{mongo_port}/?authSource=admin"
+
+    client = MongoClient(uri, serverSelectionTimeoutMS=5000)
+    db = client[mongo_dbname]
+
     db.files.create_index([("owner", ASCENDING)])
     db.files.create_index([("owner", ASCENDING), ("uploaded_at", ASCENDING)])
     db.files.create_index([("file_id", ASCENDING)], unique=True)
 
-    logger.info("MongoDB connected + indexes ensured.")
+    logger.info("MongoDB connected (%s:%s) + indexes ensured.", mongo_host, mongo_port)
+
 except Exception as e:
-    logger.warning(f"Mongo warning: {e}")
+    logger.warning(f"Mongo warning (DB disabled): {e}")
+    db = None
+
 
 def ok(payload=None, code=200):
     data = {"ok": True}
@@ -38,8 +48,10 @@ def ok(payload=None, code=200):
         data.update(payload)
     return jsonify(data), code
 
+
 def fail(msg, code=400):
     return jsonify({"ok": False, "error": msg}), code
+
 
 def _user_id():
     return (request.form.get("user_id")
@@ -50,6 +62,7 @@ def _user_id():
             or (request.get_json(silent=True) or {}).get("username")
             or "").strip()
 
+
 def _password():
     return (request.form.get("password")
             or request.form.get("pass")
@@ -58,6 +71,7 @@ def _password():
             or (request.get_json(silent=True) or {}).get("pass")
             or (request.get_json(silent=True) or {}).get("pwd")
             or "")
+
 
 def _file_obj():
     return request.files.get("file") or request.files.get("upload") or request.files.get("document")
@@ -78,6 +92,7 @@ def register():
 
         HSM.generate_identity(user, pw, KEYSTORE_DIR, BASE_STORAGE)
         return ok({"message": "Identity Created", "user_id": user}, 201)
+
     except Exception as e:
         logger.exception("Register failed")
         return fail(f"register failed: {e}", 500)
@@ -85,7 +100,6 @@ def register():
 
 @secure_bp.route("/files", methods=["POST"])
 def files():
-    
     try:
         user = _user_id()
         if not user:
@@ -100,6 +114,7 @@ def files():
         ).sort("uploaded_at", -1))
 
         return ok({"files": docs})
+
     except Exception as e:
         logger.exception("Files failed")
         return fail(f"files failed: {e}", 500)
@@ -109,7 +124,7 @@ def files():
 def upload():
     """
     Upload + Encrypt + Store
-    Mongo schema now includes:
+    Mongo schema includes:
       - uploaded_at (UTC ISO)
       - size_bytes
       - mime_type
@@ -126,20 +141,20 @@ def upload():
         mime_type = f.mimetype or "application/octet-stream"
         uploaded_at = datetime.now(timezone.utc).isoformat()
 
-        # Ensure identity exists
+        # Ensure identity exists (valid password too)
         _ = HSM.load_identity(user, pw, KEYSTORE_DIR)
 
-        # Sign plaintext (integrity)
+        # Sign plaintext 
         sig = Signer.sign_data(raw, user, pw, KEYSTORE_DIR)
 
-        # Encrypt plaintext (confidentiality)
+        # Encrypt plaintext 
         bundle = HybridCipher.encrypt_data(raw, user, pw, KEYSTORE_DIR)
 
         # Store encrypted bundle on disk
         file_id = VaultStore.new_file_id()
         VaultStore.save_bundle(BASE_STORAGE, file_id, bundle)
 
-        # Store metadata in Mongo
+        # Store metadata in Mongo (ONLY if available)
         if db is not None:
             db.files.insert_one({
                 "file_id": file_id,
@@ -221,6 +236,7 @@ def delete_file(file_id):
         VaultStore.delete_bundle(BASE_STORAGE, file_id)
 
         return ok({"status": "DELETED", "file_id": file_id})
+
     except Exception as e:
         logger.exception("Delete failed")
         return fail(f"delete failed: {e}", 500)
@@ -237,6 +253,7 @@ def sign():
 
         sig = Signer.sign_data(f.read(), user, pw, KEYSTORE_DIR)
         return ok({"signature_hex": sig.hex()})
+
     except Exception as e:
         logger.exception("Sign failed")
         return fail(f"sign failed: {e}", 500)
@@ -260,10 +277,12 @@ def verify():
         sig = bytes.fromhex(sig_hex)
         valid = Signer.verify_signature(f.read(), sig, user, pw, KEYSTORE_DIR)
         return ok({"valid": bool(valid)})
+
     except Exception as e:
         logger.exception("Verify failed")
         return fail(f"verify failed: {e}", 500)
-    
+
+
 @secure_bp.route("/login", methods=["POST"])
 def login():
     try:
@@ -274,7 +293,6 @@ def login():
             return fail("user_id/email and password are required", 400)
 
         _ = HSM.load_identity(user, pw, KEYSTORE_DIR)
-
         return ok({"message": "LOGIN_OK", "user_id": user}, 200)
 
     except FileNotFoundError:
