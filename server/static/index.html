@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Secure Cloud</title>
+    <style>
+        :root { --primary: #2563eb; --primary-hover: #1d4ed8; --bg: #f8fafc; --text: #1e293b; }
+        body { margin: 0; font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); overflow-x: hidden; }
+        
+        .navbar { position: absolute; top: 0; left: 0; padding: 1rem 2rem; z-index: 100; }
+        .brand { font-weight: 700; font-size: 1rem; color: white; background: var(--primary); padding: 0.6rem 1.2rem; border-radius: 2rem; display: flex; align-items: center; gap: 0.5rem; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .nav-links { position: absolute; top: 1rem; right: 2rem; display: flex; align-items: center; z-index: 100; }
+        .nav-links button { background: none; border: none; color: #64748b; cursor: pointer; font-weight: 600; font-size: 1rem; margin-left: 1rem; background: rgba(231, 225, 225, 0.8); padding: 0.5rem 1rem; border-radius: 0.5rem; }
+        .nav-links button:hover { color: var(--primary); background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        #userDisplay { font-weight: 600; color: #334155; background: rgba(255,255,255,0.8); padding: 0.5rem 1rem; border-radius: 0.5rem; }
+
+        .container { max-width: 1200px; margin: 0 auto; padding: 2rem; display: flex; align-items: center; justify-content: center; min-height: 100vh; box-sizing: border-box; }
+        .hidden { display: none !important; }
+
+        #landingSection { 
+            min-height: 100vh;
+            width: 100%;
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            text-align: center;
+            background: url('/static/images/landing.png') no-repeat center center;
+            background-size: cover; 
+            padding: 2rem;
+            box-sizing: border-box;
+        }
+        
+        .webpage-card { 
+            background: transparents; 
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            padding: 3rem 4rem; 
+            border-radius: 1rem; 
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1); 
+            max-width: 600px; 
+            width: 100%; 
+            animation: fadeIn 0.8s ease-out; 
+        }
+
+        .webpage-title { font-size: 3rem; font-weight: 800; color: #1e3a8a; line-height: 1.2; margin-bottom: 1.5rem; }
+        .webpage-sub { font-size: 1.25rem; color: #475569; margin-bottom: 2.5rem; line-height: 1.5; font-weight: 500; }
+        .btn-cta { background: var(--primary); color: white; border: none; padding: 1rem 3rem; font-size: 1.1rem; font-weight: 600; border-radius: 0.5rem; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; }
+        .btn-cta:hover { transform: translateY(-3px); box-shadow: 0 10px 20px -5px rgba(37, 99, 235, 0.4); background: var(--primary-hover); }
+
+        .auth-card { background: white; padding: 2.5rem; border-radius: 1rem; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); width: 100%; max-width: 400px; text-align: center; }
+        .auth-tabs { display: flex; border-bottom: 2px solid #e2e8f0; margin-bottom: 2rem; }
+        .tab { flex: 1; padding: 1rem; cursor: pointer; color: #94a3b8; font-weight: 600; }
+        .tab.active { color: var(--primary); border-bottom: 2px solid var(--primary); margin-bottom: -2px; }
+        input, textarea { width: 100%; padding: 0.8rem; margin-bottom: 1rem; border: 1px solid #cbd5e1; border-radius: 0.5rem; box-sizing: border-box; font-size: 1rem; transition: border-color 0.2s; font-family: inherit; }
+        input:focus, textarea:focus { outline: none; border-color: var(--primary); }
+        .btn-full { width: 100%; background: var(--primary); color: white; padding: 0.8rem; border: none; border-radius: 0.5rem; font-weight: 600; cursor: pointer; font-size: 1rem; }
+        .btn-full:hover { background: var(--primary-hover); }
+
+        .dashboard-layout { display: flex; flex-direction: column; width: 100%; max-width: 900px; }
+        .nav-tabs { display: flex; gap: 1rem; margin-bottom: 2rem; justify-content: center; }
+        .nav-tab-btn { padding: 0.75rem 1.5rem; border-radius: 2rem; border: none; font-weight: 600; cursor: pointer; background: #e2e8f0; color: #64748b; transition: all 0.2s; }
+        .nav-tab-btn.active { background: var(--primary); color: white; box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.3); }
+
+        .card { background: white; padding: 2rem; border-radius: 1rem; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); margin-bottom: 2rem; }
+        .file-list { width: 100%; border: 1px solid #e2e8f0; border-radius: 0.5rem; overflow: hidden; }
+        .file-item { padding: 1rem; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+        .file-item:last-child { border-bottom: none; }
+        .file-icon { font-size: 1.2rem; margin-right: 1rem; background: #eff6ff; padding: 0.4rem; border-radius: 0.4rem; color: var(--primary); }
+
+        .file-actions { display:flex; gap:10px; align-items:center; }
+        .action-btn {
+            cursor:pointer;
+            border:none;
+            background: none;
+            font-weight: 800;
+            color:#2563eb;
+            padding: 0.45rem 0.7rem;
+            border-radius: 0.5rem;
+        }
+        .action-btn:hover { background:#eff6ff; }
+        .danger-btn { color:#dc2626; }
+        .danger-btn:hover { background:#fef2f2; }
+
+        .small-muted { font-size: 0.75rem; color:#94a3b8; margin-top:4px; font-family: monospace; }
+
+        .verify-box { background: #f0fdf4; border: 1px solid #bbf7d0; padding: 1rem; border-radius: 0.5rem; text-align: center; margin-top: 1rem; display: none; }
+        .verify-box.error { background: #fef2f2; border-color: #fecaca; color: #dc2626; }
+        .verify-box.success { color: #16a34a; }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body>
+
+    <nav class="navbar">
+        <div class="brand">☁️ Secure Cloud Storage</div>
+    </nav>
+    <div class="nav-links">
+        <span id="userDisplay"></span>
+        <button id="logoutBtn" class="hidden" onclick="logout()">Log Out</button>
+    </div>
+
+    <div id="landingSection">
+        <div class="webpage-card">
+            <h1 class="webpage-title">All your files in one <br> safe place</h1>
+            <p class="webpage-sub">Free file storage for everyone. Store your documents, music, and images securely in the cloud.</p>
+            <button class="btn-cta" onclick="showAuth()">Start uploading</button>
+        </div>
+    </div>
+
+    <div id="authSection" class="container hidden">
+        <div class="auth-card">
+            <div class="auth-tabs">
+                <div class="tab active" onclick="switchAuthTab('login')" id="tabLogin">Login</div>
+                <div class="tab" onclick="switchAuthTab('register')" id="tabRegister">Register</div>
+            </div>
+
+            <div id="loginForm">
+                <h2>Access Your Vault</h2>
+                <p style="color: #64748b; font-size: 0.9rem; margin-bottom: 1.5rem;">Enter credentials to unlock your HSM Key.</p>
+                <input type="text" id="loginUser" placeholder="Email / User ID">
+                <input type="password" id="loginPass" placeholder="Password">
+                <button class="btn-full" onclick="login()">Unlock Vault</button>
+            </div>
+
+            <div id="registerForm" class="hidden">
+                <h2>Create Identity</h2>
+                <p style="color: #64748b; font-size: 0.9rem; margin-bottom: 1.5rem;">Generates RSA-4096 Key Pair + CA-signed Certificate (PKI).</p>
+                <input type="text" id="regUser" placeholder="Enter Your Email">
+                <input type="password" id="regPass" placeholder="Enter Password">
+                <button class="btn-full" onclick="register()" style="background: #10b981;">Generate Keys</button>
+                <div id="regStatus" style="margin-top: 1rem; font-size: 0.9rem;"></div>
+            </div>
+            
+            <p style="margin-top: 1.5rem; font-size: 0.85rem; color: #94a3b8; cursor: pointer;" onclick="showLanding()">← Back to Home</p>
+        </div>
+    </div>
+
+    <div id="dashboardSection" class="container hidden">
+        <div class="dashboard-layout">
+            
+            <div class="nav-tabs">
+                <button class="nav-tab-btn active" onclick="switchMainTab('vault')" id="btnVault">🔒 Encrypted Vault</button>
+                <button class="nav-tab-btn" onclick="switchMainTab('sign')" id="btnSign">✍️ Digital Signatures</button>
+            </div>
+
+            <div id="vaultView">
+                <div class="card">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem; gap:10px;">
+                        <h2 style="margin:0;">My Files</h2>
+                        <button class="btn-cta" style="font-size: 0.9rem; padding: 0.5rem 1rem;" onclick="document.getElementById('fileInput').click()">Upload + Encrypt</button>
+                        <input type="file" id="fileInput" hidden onchange="uploadFile()">
+                    </div>
+                    <div id="uploadStatus" style="text-align: center; margin-bottom: 1rem; font-weight: 700;"></div>
+                    <div class="file-list" id="fileList">
+                        <div style="padding: 2rem; text-align: center; color: #cbd5e1;">Loading secure files...</div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="signView" class="hidden">
+                <div class="card">
+                    <h2 style="margin-top:0; color: var(--primary);">Step 1: Sign a Document</h2>
+                    <p style="color: #64748b;">Prove you created a file without hiding its contents.</p>
+                    <input type="file" id="signInput">
+                    <button class="btn-full" style="width: auto; margin-top: 0.5rem;" onclick="signFile()">Generate Signature</button>
+                    
+                    <div style="margin-top: 1rem;">
+                        <label style="font-size: 0.8rem; font-weight: bold; color: #64748b;">Your Signature (Share this with the recipient):</label>
+                        <textarea id="sigOutput" readonly style="height: 80px; font-family: monospace; font-size: 0.85rem; background: #f1f5f9; color: #334155;"></textarea>
+                    </div>
+                </div>
+
+                <div class="card" style="border-top: 4px solid #10b981;">
+                    <h2 style="margin-top:0; color: #059669;">Step 2: Verify Authenticity</h2>
+                    <p style="color: #64748b;">Check if a file has been tampered with.</p>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <div>
+                            <label style="font-size: 0.8rem; font-weight: bold;">1. Upload File</label>
+                            <input type="file" id="verifyInput">
+                        </div>
+                        <div>
+                            <label style="font-size: 0.8rem; font-weight: bold;">2. Paste Signature</label>
+                            <input type="text" id="verifySig" placeholder="Paste hex signature here...">
+                        </div>
+                    </div>
+                    
+                    <button class="btn-full" style="background: #10b981; margin-top: 1rem;" onclick="verifyFile()">Verify Integrity</button>
+                    
+                    <div id="verifyResult" class="verify-box"></div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script src="/static/app.js" defer></script>
+</body>
+</html>
