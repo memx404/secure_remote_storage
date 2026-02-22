@@ -1,12 +1,14 @@
-name: CI
+name: CI Pipeline
 
 on:
   push:
-    branches: ["main", "master"]
+    branches: ["dev", "main", "master"]
   pull_request:
+    branches: ["dev", "main", "master"]
+  workflow_dispatch:
 
 jobs:
-  test:
+  tests:
     runs-on: ubuntu-latest
 
     services:
@@ -26,7 +28,6 @@ jobs:
     env:
       MONGO_INITDB_ROOT_PASSWORD: securepassword123
       SRS_STORAGE: secure_storage_ci
-
       PYTHONUNBUFFERED: "1"
 
     steps:
@@ -44,6 +45,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pytest
+
+      - name: Show repository layout (debug)
+        run: |
+          ls -la
+          ls -la tests || true
+          python -c "import sys; print(sys.version)"
 
       - name: Run tests
         run: |
