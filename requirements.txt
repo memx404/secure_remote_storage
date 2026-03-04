@@ -9,3 +9,5 @@ pymongo
 argon2-cffi
 flask-cors
 gunicorn
+PyJWT==2.9.0
+gunicorn==22.0.0
