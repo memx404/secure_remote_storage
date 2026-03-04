@@ -1,23 +1,26 @@
-# Base Image: Python 3.10 Slim
-# Selected for minimal footprint and compatibility with cryptography wheels.
-FROM python:3.10-slim
+FROM python:3.11-slim
 
-# Set working directory for the application
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
-# Install dependencies
-# Copied first to optimize Docker layer caching during rebuilds.
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY requirements.txt /app/requirements.txt
+RUN pip install --upgrade pip && pip install -r requirements.txt
 
-# Copy application source code
-COPY . .
+COPY . /app
 
-# Initialize storage directory structure
-RUN mkdir -p server/storage
+RUN useradd -m appuser && chown -R appuser:appuser /app
+USER appuser
 
-# Expose API port
 EXPOSE 5000
 
-# Entrypoint: Execute the server package as a module
-CMD ["python", "-m", "server.app"]
+
+ENV SRS_STORAGE=/app/secure_storage
+
+CMD ["gunicorn", "-w", "2", "-b", "0.0.0.0:5000", "server.app:app"]
