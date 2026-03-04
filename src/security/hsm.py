@@ -20,7 +20,9 @@ class HSM:
     """
 
     @staticmethod
-    def generate_identity(user_id: str, password: str, keystore_dir: str, ca_dir: str):
+    def generate_identity(username, password, user_dir, ca_dir=None):
+        if ca_dir is None:
+            ca_dir = user_dir
 
         os.makedirs(keystore_dir, exist_ok=True)
 

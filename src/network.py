@@ -71,20 +71,32 @@ def list_files(token: str) -> Dict[str, Any]:
     return r.json()
 
 
-def upload_file(token: str, password: str, file_path: str) -> Dict[str, Any]:
-    with open(file_path, "rb") as f:
-        files = {"file": (os.path.basename(file_path), f)}
-        data = {"password": password}
+def upload_file(*args, **kwargs):
+    
+    if len(args) == 2 and isinstance(args[0], str) and isinstance(args[1], (bytes, bytearray)):
+        file_name = args[0]
+        encrypted_data = bytes(args[1])
+        files = {"file": (file_name, encrypted_data)}
 
-        r = requests.post(
-            _api_url("/upload"),
-            files=files,
-            data=data,
-            headers=_nonce_headers(token=token),
-            timeout=REQUEST_TIMEOUT,
-        )
-    r.raise_for_status()
-    return r.json()
+        return requests.post(_api_url("/upload"), files=files, timeout=REQUEST_TIMEOUT)
+
+    if len(args) == 3 and all(isinstance(a, str) for a in args):
+        token, password, file_path = args
+        with open(file_path, "rb") as f:
+            files = {"file": (os.path.basename(file_path), f)}
+            data = {"password": password}
+
+            r = requests.post(
+                _api_url("/upload"),
+                files=files,
+                data=data,
+                headers=_nonce_headers(token=token),
+                timeout=REQUEST_TIMEOUT,
+            )
+        r.raise_for_status()
+        return r.json()
+
+    raise TypeError("upload_file() expected (file_name, encrypted_bytes) OR (token, password, file_path)"))
 
 
 def decrypt_download(token: str, password: str, file_id: str, output_path: str) -> None:
