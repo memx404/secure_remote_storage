@@ -1,7 +1,8 @@
 import os
 import uuid
+from typing import Any, Dict, Optional, Union
+
 import requests
-from typing import Optional, Dict, Any, Union
 
 from src.settings import SERVER_URL, REQUEST_TIMEOUT
 
@@ -15,8 +16,11 @@ def _api_url(path: str) -> str:
     return f"{base}/{prefix}/{endpoint}"
 
 
-def _nonce_headers(token: Optional[str] = None, extra: Optional[Dict[str, str]] = None) -> Dict[str, str]:
-    headers = {"X-Request-Id": str(uuid.uuid4())}
+def _nonce_headers(
+    token: Optional[str] = None,
+    extra: Optional[Dict[str, str]] = None,
+) -> Dict[str, str]:
+    headers: Dict[str, str] = {"X-Request-Id": str(uuid.uuid4())}
     if token:
         headers["Authorization"] = f"Bearer {token}"
     if extra:
@@ -28,6 +32,14 @@ def health_check() -> Dict[str, Any]:
     r = requests.get(_api_url("/health"), timeout=REQUEST_TIMEOUT)
     r.raise_for_status()
     return r.json()
+
+
+def check_server_status() -> bool:
+    try:
+        r = requests.get(_api_url("/health"), timeout=REQUEST_TIMEOUT)
+        return r.status_code == 200
+    except requests.RequestException:
+        return False
 
 
 def register(user_id: str, password: str) -> Dict[str, Any]:
@@ -71,21 +83,37 @@ def list_files(token: str) -> Dict[str, Any]:
     return r.json()
 
 
-def upload_file(*args, **kwargs):
+def download_file(file_id: str) -> Optional[bytes]:
+    try:
+        r = requests.get(_api_url(f"/download/{file_id}"), timeout=REQUEST_TIMEOUT)
+        if r.status_code == 200:
+            return r.content
+        return None
+    except requests.RequestException:
+        return None
+
+
+def upload_file(*args: Any) -> Union[Dict[str, Any], requests.Response]:
     
-    if len(args) == 2 and isinstance(args[0], str) and isinstance(args[1], (bytes, bytearray)):
+    if (
+        len(args) == 2
+        and isinstance(args[0], str)
+        and isinstance(args[1], (bytes, bytearray))
+    ):
         file_name = args[0]
         encrypted_data = bytes(args[1])
         files = {"file": (file_name, encrypted_data)}
-
-        return requests.post(_api_url("/upload"), files=files, timeout=REQUEST_TIMEOUT)
+        return requests.post(
+            _api_url("/upload"),
+            files=files,
+            timeout=REQUEST_TIMEOUT,
+        )
 
     if len(args) == 3 and all(isinstance(a, str) for a in args):
         token, password, file_path = args
         with open(file_path, "rb") as f:
             files = {"file": (os.path.basename(file_path), f)}
             data = {"password": password}
-
             r = requests.post(
                 _api_url("/upload"),
                 files=files,
@@ -96,7 +124,9 @@ def upload_file(*args, **kwargs):
         r.raise_for_status()
         return r.json()
 
-    raise TypeError("upload_file() expected (file_name, encrypted_bytes) OR (token, password, file_path)"))
+    raise TypeError(
+       
+    )
 
 
 def decrypt_download(token: str, password: str, file_id: str, output_path: str) -> None:
@@ -108,7 +138,6 @@ def decrypt_download(token: str, password: str, file_id: str, output_path: str) 
         timeout=REQUEST_TIMEOUT,
     )
     r.raise_for_status()
-
     with open(output_path, "wb") as out:
         out.write(r.content)
 
@@ -121,56 +150,3 @@ def delete_file(token: str, file_id: str) -> Dict[str, Any]:
     )
     r.raise_for_status()
     return r.json()
-
-
-def check_server_status() -> bool:
-    
-    try:
-        r = requests.get(_api_url("/health"), timeout=REQUEST_TIMEOUT)
-        return r.status_code == 200
-    except requests.RequestException:
-        return False
-
-
-def upload_file_legacy(file_name: str, encrypted_data: bytes) -> bool:
-    
-    try:
-        files = {"file": (file_name, encrypted_data)}
-        r = requests.post(_api_url("/upload"), files=files, timeout=REQUEST_TIMEOUT)
-        return r.status_code in (200, 201)
-    except requests.RequestException:
-        return False
-
-
-def download_file(file_id: str) -> Optional[bytes]:
-    
-    try:
-        r = requests.get(_api_url(f"/download/{file_id}"), timeout=REQUEST_TIMEOUT)
-        if r.status_code == 200:
-            return r.content
-        return None
-    except requests.RequestException:
-        return None
-
-
-def upload_file(*args, **kwargs) -> Union[Dict[str, Any], bool]:
-    
-    if len(args) == 2 and isinstance(args[0], str) and isinstance(args[1], (bytes, bytearray)):
-        return upload_file_legacy(args[0], bytes(args[1]))
-
-    if len(args) == 3 and all(isinstance(a, str) for a in args):
-        token, password, file_path = args
-        with open(file_path, "rb") as f:
-            files = {"file": (os.path.basename(file_path), f)}
-            data = {"password": password}
-            r = requests.post(
-                _api_url("/upload"),
-                files=files,
-                data=data,
-                headers=_nonce_headers(token=token),
-                timeout=REQUEST_TIMEOUT,
-            )
-        r.raise_for_status()
-        return r.json()
-
-    raise TypeError("upload_file() expected (token, password, file_path) OR (file_name, encrypted_bytes)")
