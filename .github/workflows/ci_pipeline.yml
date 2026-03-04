@@ -1,14 +1,17 @@
-name: CI Pipeline
+name: Secure Remote Storage CI
 
 on:
   push:
-    branches: ["dev", "main", "master"]
+    branches:
+      - dev
+      - main
   pull_request:
-    branches: ["dev", "main", "master"]
-  workflow_dispatch:
+    branches:
+      - main
 
 jobs:
-  tests:
+  build-test:
+
     runs-on: ubuntu-latest
 
     services:
@@ -20,47 +23,43 @@ jobs:
           MONGO_INITDB_ROOT_USERNAME: admin
           MONGO_INITDB_ROOT_PASSWORD: securepassword123
         options: >-
-          --health-cmd "mongosh --quiet --eval 'db.runCommand({ ping: 1 })' || exit 1"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 10
+          --health-cmd="mongosh --quiet --eval 'db.runCommand({ ping: 1 })' || exit 1"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
 
     env:
-      MONGO_INITDB_ROOT_PASSWORD: securepassword123
       SRS_STORAGE: secure_storage_ci
+
+      MONGO_HOST: localhost
+      MONGO_PORT: "27017"
+      MONGO_USER: admin
+      MONGO_DB: srs_db
+      MONGO_INITDB_ROOT_PASSWORD: securepassword123
+
       PYTHONUNBUFFERED: "1"
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          cache: "pip"
+    - name: Checkout repository
+      uses: actions/checkout@v4
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pytest
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
 
-      - name: Show repository layout (debug)
-        run: |
-          ls -la
-          ls -la tests || true
-          python -c "import sys; print(sys.version)"
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
 
-      - name: Run tests
-        run: |
-          pytest -q
+    - name: Run Flake8 (Code Quality)
+      run: |
+        echo "Running flake8..."
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
 
-env:
-  MONGO_INITDB_ROOT_PASSWORD: securepassword123
-  MONGO_HOST: localhost
-  MONGO_PORT: 27017
-  MONGO_USER: admin
-  MONGO_DB: srs_db
-  SRS_STORAGE: secure_storage_ci
-  PYTHONUNBUFFERED: "1"
+    - name: Run Tests
+      run: |
+        echo "Running pytest..."
+        pytest -q
