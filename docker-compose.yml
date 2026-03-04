@@ -1,7 +1,7 @@
-version: '3.8'
+version: "3.8"
 
 services:
-  # 1. DATABASE SERVICE
+  # 1) DATABASE
   mongo:
     image: mongo:latest
     container_name: srs_mongo
@@ -9,13 +9,13 @@ services:
       MONGO_INITDB_ROOT_USERNAME: admin
       MONGO_INITDB_ROOT_PASSWORD: securepassword123
     ports:
-      - "27017:27017"     
+      - "27017:27017"
     volumes:
       - mongo_data:/data/db
     networks:
       - srs_network
 
-  # 1B. MongoDB WEB GUI
+  # 2) MONGO GUI
   mongo-express:
     image: mongo-express:latest
     container_name: srs_mongo_express
@@ -29,13 +29,13 @@ services:
       ME_CONFIG_BASICAUTH_PASSWORD: userpass123
       ME_CONFIG_SITE_BASEURL: /
     ports:
-      - "8081:8081"      
+      - "8081:8081"
     networks:
       - srs_network
 
-  # 2. FLASK SERVER
+  # 3) FLASK API SERVER
   web:
-    build: 
+    build:
       context: .
       dockerfile: server/Dockerfile
     container_name: srs_server
@@ -45,12 +45,12 @@ services:
       - MONGO_INITDB_ROOT_PASSWORD=securepassword123
       - SRS_STORAGE=/app/secure_storage
     volumes:
-      - ./secure_storage:/app/secure_storage
+      - secure_storage:/app/secure_storage
       - ./keys:/app/keys
     networks:
       - srs_network
 
-  # 3. NGINX PROXY
+  # 4) NGINX TLS REVERSE PROXY (public entrypoint)
   nginx:
     image: nginx:latest
     container_name: srs_proxy
@@ -64,9 +64,45 @@ services:
     networks:
       - srs_network
 
+  # 5) AUTO-BANNER: prints endpoints automatically in logs
+  banner:
+    image: alpine:3.20
+    depends_on:
+      - nginx
+      - mongo-express
+    command: >
+      sh -c '
+        sleep 4;
+        echo "";
+        echo "--------------------------------------------------";
+        echo " Secure Remote Storage System Started Successfully";
+        echo "--------------------------------------------------";
+        echo "";
+        echo "Web (HTTPS via Nginx):";
+        echo "  https://localhost";
+        echo "";
+        echo "API (Flask behind Nginx):";
+        echo "  Health:     https://localhost/api/health";
+        echo "";
+        echo "press Cntrl+C to exit";
+        echo "";
+        echo "Mongo Express:";
+        echo "  http://localhost:8081";
+        echo "";
+        echo "Stop everything:";
+        echo "  docker compose down";
+        echo "";
+        echo "--------------------------------------------------";
+        echo "";
+        tail -f /dev/null
+      '
+    networks:
+      - srs_network
+
 networks:
   srs_network:
     driver: bridge
 
 volumes:
   mongo_data:
+  secure_storage:
