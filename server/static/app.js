@@ -2,6 +2,18 @@ const API_BASE = "/api";
 
 const $ = (id) => document.getElementById(id);
 
+let sessionToken = null;
+
+function newNonce() {
+  return crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + "-" + Math.random();
+}
+
+function authHeaders(extra = {}) {
+  const h = { ...extra, "X-Request-Id": newNonce() };
+  if (sessionToken) h["Authorization"] = `Bearer ${sessionToken}`;
+  return h;
+}
+
 function safeText(el, txt, color = "") {
   if (!el) return;
   el.innerText = txt || "";
@@ -367,8 +379,6 @@ async function login() {
     return;
   }
 
-  // Optional: show a small status message if you have one
-  // (If you don’t have an element, this will do nothing)
   const statusEl = $("loginStatus");
   if (statusEl) {
     statusEl.style.color = "#0f172a";
@@ -376,17 +386,22 @@ async function login() {
   }
 
   try {
-    // Call server-side login verification (PKCS12 unlock)
     const res = await fetch("/api/login", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "X-Request-Id": newNonce()  
+      },
       body: JSON.stringify({ user_id: u, password: p })
     });
 
     const data = await res.json().catch(() => ({}));
 
-    if (res.ok && data.ok) {
-      // ✅ Only now store credentials in memory
+    if (res.ok && data.ok && data.token) {
+      // token-based session
+      sessionToken = data.token;
+
+      // keep user + pass in-memory only (needed for PKCS12 unlock)
       currentUser = u;
       currentPass = p;
 
@@ -398,7 +413,7 @@ async function login() {
       }
 
       showDashboard();
-      loadFiles();
+      await loadFiles(); 
       return;
     }
 
@@ -411,8 +426,6 @@ async function login() {
     }
 
     if ($("loginPass")) $("loginPass").value = "";
-    return;
-
   } catch (err) {
     const msg = "Network/server error during login.";
     if (statusEl) {
