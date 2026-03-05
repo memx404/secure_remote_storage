@@ -4,7 +4,7 @@ from typing import Any, Dict, Optional, Union
 
 import requests
 
-from src.settings import SERVER_URL, REQUEST_TIMEOUT
+from src.settings import REQUEST_TIMEOUT, SERVER_URL
 
 API_PREFIX = os.getenv("SRS_API_PREFIX", "/api")
 
@@ -35,6 +35,7 @@ def health_check() -> Dict[str, Any]:
 
 
 def check_server_status() -> bool:
+    """Legacy helper expected by unit tests."""
     try:
         r = requests.get(_api_url("/health"), timeout=REQUEST_TIMEOUT)
         return r.status_code == 200
@@ -64,11 +65,14 @@ def login(user_id: str, password: str) -> str:
     )
     r.raise_for_status()
     data = r.json()
+
     if not data.get("ok"):
         raise RuntimeError(data.get("error", "Login failed"))
+
     token = data.get("token")
     if not token:
         raise RuntimeError("Login ok but no token returned")
+
     return token
 
 
@@ -84,6 +88,7 @@ def list_files(token: str) -> Dict[str, Any]:
 
 
 def download_file(file_id: str) -> Optional[bytes]:
+    """Legacy helper expected by tests (tests mock requests.get)."""
     try:
         r = requests.get(_api_url(f"/download/{file_id}"), timeout=REQUEST_TIMEOUT)
         if r.status_code == 200:
@@ -94,7 +99,12 @@ def download_file(file_id: str) -> Optional[bytes]:
 
 
 def upload_file(*args: Any) -> Union[Dict[str, Any], requests.Response]:
-    
+    """
+    Dual-mode upload:
+    - Tests: upload_file(file_name: str, encrypted_bytes: bytes) -> Response
+    - App:   upload_file(token: str, password: str, file_path: str) -> Dict[str, Any]
+    """
+    # Unit-test/legacy mode (tests assert result.status_code)
     if (
         len(args) == 2
         and isinstance(args[0], str)
@@ -109,6 +119,7 @@ def upload_file(*args: Any) -> Union[Dict[str, Any], requests.Response]:
             timeout=REQUEST_TIMEOUT,
         )
 
+    # App mode
     if len(args) == 3 and all(isinstance(a, str) for a in args):
         token, password, file_path = args
         with open(file_path, "rb") as f:
@@ -125,7 +136,7 @@ def upload_file(*args: Any) -> Union[Dict[str, Any], requests.Response]:
         return r.json()
 
     raise TypeError(
-       
+        "upload_file() expected (file_name, encrypted_bytes) OR (token, password, file_path)"
     )
 
 
