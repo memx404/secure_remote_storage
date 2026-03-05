@@ -1,95 +1,178 @@
-# Secure Remote Storage (SRS)
+# Secure Remote Storage (PKI + Encrypted Vault) — Dockerized
 
-A secure, CLI-based file storage system implementing hybrid encryption (AES-256 + RSA-2048) and a secure client-server architecture. Developed for the ST6051CEM Practical Cryptography module.
+A secure file storage service that provides **PKI-based authentication**, **encrypted vault storage**, and **integrity verification** using **digital signatures**. The application is delivered as a Docker Compose stack with an Nginx reverse proxy, a Flask/Gunicorn API, and MongoDB for metadata + audit logs.
 
-## 🚀 Features
-* **Hybrid Encryption:** AES-256 (CBC) for data confidentiality and RSA-2048 (OAEP) for secure key exchange.
-* **Transport Security:** Full HTTPS/TLS encryption using Nginx reverse proxy.
-* **Secure Deletion:** Anti-forensic wiping of local files after encryption.
-* **Networked Storage:** Flask-based REST API server for remote file management.
-* **Containerized:** Full Docker support for production-grade deployment.
-* **Input Sanitization:** Protects against directory traversal and malicious filenames.
+---
 
-## 🛠️ Installation & Setup
+## Key Security Goals
+
+- **Authentication (PKI):** Per-user identity protected in a **PKCS#12 keystore**.
+- **Confidentiality:** Files are encrypted before storage (vault never stores plaintext).
+- **Integrity + Non-repudiation:** Files are digitally signed; tampering is detected.
+- **Operational visibility:** Audit logs and metadata stored in MongoDB (with disk fallback).
+- **Automation:** One command to run the full stack (no manual cert steps required if using cert-generator).
+
+---
+
+## Architecture (High-Level)
+
+**Client → Nginx (TLS) → Flask API (Gunicorn) → Vault + MongoDB**
+
+- Nginx terminates HTTPS (port **443**) and forwards traffic to the web API.
+- Flask API handles register/login, upload, list, decrypt, delete.
+- Vault stores:
+  - `<file_id>.json` encrypted bundle
+  - `<file_id>.meta.json` metadata (owner, filename, signature, bundle hash, timestamps)
+- MongoDB stores metadata + audit logs (optional for CI; disk fallback remains).
+
+---
+
+## Services & Ports
+
+| Service | Purpose | Port |
+|--------|---------|------|
+| `nginx` | TLS reverse proxy | `https://localhost:443` |
+| `web` | Flask API behind Gunicorn | internal `:5000` |
+| `mongo` | metadata + audit logs | `localhost:27017` |
+| `mongo-express` | DB UI (admin only) | `http://localhost:8081` |
+| `cert-generator` | auto-creates dev TLS certs | none |
+
+---
+
+## Quick Start (Automation First)
 
 ### Prerequisites
-* Python 3.10+
-* Docker Desktop (Recommended for HTTPS support)
-* OpenSSL (Handled via Python dependencies)
+- Docker Desktop (Windows/Mac) or Docker Engine (Linux)
+- Docker Compose v2 (bundled with Docker Desktop)
 
-### 🔐 Security Setup (Required)
-Before running the application, you must generate the local SSL certificates. This acts as a private "Certificate Authority" for the secure tunnel.
+### 1) Run the full stack (single command)
+From the project root:
 
-1.  **Install Crypto Utilities:**
-    ```bash
-    pip install -r requirements.txt
-    ```
-2.  **Generate Certificates:**
-    ```bash
-    python generate_certs.py
-    ```
-    *Output: Creates `nginx/certs/server.key` and `server.crt` with Subject Alternative Name (SAN).*
+```bash
+docker compose up --build
 
----
+Then open:
 
-### 🐳 Deployment (Docker)
-This is the recommended way to run the system as it includes the Nginx Security Proxy.
+Web App (HTTPS): https://localhost/
 
-1.  **Start Services:**
-    ```bash
-    docker-compose up --build -d
-    ```
-2.  **Verify Access:**
-    * Open browser to: `https://localhost`
-    * **Note:** Accept the "Self-Signed Certificate" warning (Advanced -> Proceed).
-    * **Success:** You will see the text: `Secure Storage Server is Online!`
-3.  **Stop Services:**
-    ```bash
-    docker-compose down
-    ```
+Mongo Express: http://localhost:8081
 
-### 🐍 Manual Setup (No Docker)
-*Only use this if Docker is unavailable. You must disable HTTPS in `src/settings.py` first.*
+Note: Because certificates are self-signed (dev), your browser will show a warning.
+Click Advanced → Proceed.
 
-1.  **Start Server (Terminal 1):** `python -m server.app`
-2.  **Start Client (Terminal 2):** `python main.py`
+2) Stop the stack
+docker compose down
+3) Remove all data (clean reset)
 
----
+This deletes Mongo data + vault data volumes (use carefully):
 
-## 💻 Usage Guide
+docker compose down -v
+TLS Certificates (Automated)
 
-The application runs an interactive shell (`SRS-Shell`).
+This project requires TLS certs for Nginx:
 
-### Key Commands
-| Command | Description |
-| :--- | :--- |
-| `status` | Checks if the secure server (HTTPS) is online. |
-| `generate` | Creates a new RSA Identity (Public/Private keys). |
-| `encrypt <file>` | Encrypts a file using Hybrid Encryption. |
-| `upload <file>` | Uploads an encrypted file to the secure vault. |
-| `download <name>` | Downloads a file from the vault. |
-| `decrypt -f <file> -k <key>` | Decrypts a file using your private key. |
+nginx/certs/server.crt
 
-### Example Workflow
-```text
-SRS-Shell> status
-[+] Server is ONLINE and Secure (HTTPS).
+nginx/certs/server.key
 
-SRS-Shell> generate
-[+] Identity generated successfully.
+Recommended: Auto-generate (cert-generator)
 
-SRS-Shell> encrypt "confidential_report.pdf"
-[+] Success. Encrypted to: C:\...\confidential_report.pdf.enc
+If your docker-compose.yml includes the cert-generator service, certificates are created automatically the first time you run:
 
-SRS-Shell> upload "confidential_report.pdf.enc"
-[+] Success! Server stored file as: confidential_report.pdf.enc
+docker compose up --build
+Manual alternative: generate_certs.py
 
-## 🔧 Troubleshooting
-# 1. Stop containers
-docker-compose down
+If you prefer manual generation:
 
-# 2. Rebuild Nginx without cache (Forces new cert copy)
-docker-compose build --no-cache nginx
+python generate_certs.py
+docker compose up --build
+API Usage (Core Endpoints)
 
-# 3. Start services
-docker-compose up -d
+Base path is routed through Nginx over HTTPS. Typical endpoints include:
+
+POST /api/register
+
+POST /api/login
+
+POST /api/upload (multipart form-data: file, password)
+
+POST /api/files
+
+POST /api/decrypt/<file_id>
+
+POST /api/delete/<file_id>
+
+The API uses a Bearer token after login.
+Requests must include:
+
+Authorization: Bearer <token>
+
+X-Request-Id: <unique_nonce> (replay protection)
+
+Data Storage Layout
+
+Within the container volume:
+
+secure_storage/
+  ├── keystore/        # PKCS#12 user identities
+  ├── ca/              # local CA assets
+  └── vault/           # encrypted files + metadata
+        ├── <id>.json
+        └── <id>.meta.json
+Persistence behavior
+
+Local runtime: data remains until you run docker compose down -v.
+
+CI tests: use temporary test storage and clean up after finishing.
+
+CI Pipeline (GitHub Actions)
+
+CI performs:
+
+Python dependency install
+
+Pytest test suite
+
+Docker Compose build (validates deployment configuration)
+
+This ensures:
+
+Tests validate crypto, routes, storage, and security behavior.
+
+The deployment stack builds exactly as it runs locally.
+
+Common Troubleshooting
+1) “Bad Gateway” in browser
+
+This usually means Nginx cannot reach the web container.
+
+Check:
+
+docker compose ps
+docker logs srs_server --tail 80
+docker logs srs_proxy --tail 80
+2) Browser HTTPS warning
+
+Expected for self-signed dev certs.
+Proceed via Advanced in the browser.
+
+3) Mongo not available
+
+The API includes disk fallback for file listing and decrypt metadata.
+Mongo is still recommended for audit logs and richer querying.
+
+4) Clean rebuild
+docker compose down -v
+docker compose up --build
+
+Security Notes (Scope)
+
+Self-signed certificates are for development/testing.
+
+Production should use:
+
+a trusted CA (Let’s Encrypt / enterprise CA),
+
+hardened secrets management,
+
+and external certificate validation (OCSP/CRL) if required.
