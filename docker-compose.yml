@@ -1,8 +1,6 @@
-version: "3.8"
-
 services:
-  services:
 
+  # 0) CERTIFICATE GENERATOR (creates TLS certs automatically if missing)
   cert-generator:
     image: alpine:3.20
     container_name: srs_cert_gen
@@ -22,12 +20,8 @@ services:
         echo 'TLS certificates already exist.';
       fi
       "
+    restart: "no"
 
-  web:
-    build:
-      context: .
-      dockerfile: server/Dockerfile
-      
   # 1) DATABASE
   mongo:
     image: mongo:latest
@@ -77,7 +71,7 @@ services:
     networks:
       - srs_network
 
-  # 4) NGINX TLS REVERSE PROXY (public entrypoint)
+  # 4) NGINX TLS REVERSE PROXY
   nginx:
     image: nginx:latest
     container_name: srs_proxy
@@ -88,10 +82,11 @@ services:
       - ./nginx/certs:/etc/nginx/certs
     depends_on:
       - web
+      - cert-generator
     networks:
       - srs_network
 
-  # 5) AUTO-BANNER: prints endpoints automatically in logs
+  # 5) STARTUP BANNER
   banner:
     image: alpine:3.20
     depends_on:
@@ -108,10 +103,8 @@ services:
         echo "Web (HTTPS via Nginx):";
         echo "  https://localhost";
         echo "";
-        echo "API (Flask behind Nginx):";
-        echo "  Health:     https://localhost/api/health";
-        echo "";
-        echo "press Cntrl+C to exit";
+        echo "API Health:";
+        echo "  https://localhost/api/health";
         echo "";
         echo "Mongo Express:";
         echo "  http://localhost:8081";
@@ -120,7 +113,6 @@ services:
         echo "  docker compose down";
         echo "";
         echo "--------------------------------------------------";
-        echo "";
         tail -f /dev/null
       '
     networks:
