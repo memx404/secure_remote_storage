@@ -4,15 +4,12 @@ import re
 import uuid
 import logging
 from datetime import datetime, timezone
-
 from flask import Blueprint, request, jsonify, send_file
 from pymongo import MongoClient, ASCENDING
-
 from src.security.hsm import HSM
 from src.security.signer import Signer
 from src.security.hybrid import HybridCipher
 from src.storage.vault_store import VaultStore
-
 from src.security.auth import generate_token, verify_token
 from src.security.replay import ReplayGuard
 from src.security.rate_limit import RateLimiter
@@ -28,17 +25,19 @@ CA_DIR = os.path.join(BASE_STORAGE, "ca")
 os.makedirs(KEYSTORE_DIR, exist_ok=True)
 os.makedirs(CA_DIR, exist_ok=True)
 
-# Replay + Rate Limiting (coursework-grade)
+# Replay + Rate Limiting 
 replay_guard = ReplayGuard(ttl_seconds=int(os.getenv("SRS_NONCE_TTL", "120")))
-rate_limiter = RateLimiter(max_requests=int(os.getenv("SRS_RL_MAX", "30")),
-                           window_seconds=int(os.getenv("SRS_RL_WINDOW", "60")))
+rate_limiter = RateLimiter(
+    max_requests=int(os.getenv("SRS_RL_MAX", "30")),
+    window_seconds=int(os.getenv("SRS_RL_WINDOW", "60")),
+)
 
-# Mongo (Docker + CI)
+ 
 db = None
 try:
     mongo_user = os.getenv("MONGO_USER", "admin")
     mongo_pass = os.getenv("MONGO_INITDB_ROOT_PASSWORD", "securepassword123")
-    mongo_host = os.getenv("MONGO_HOST", "mongo")          # docker default
+    mongo_host = os.getenv("MONGO_HOST", "mongo")
     mongo_port = os.getenv("MONGO_PORT", "27017")
     mongo_dbname = os.getenv("MONGO_DB", "srs_db")
 
@@ -124,7 +123,6 @@ def _require_nonce():
 
 def token_required(fn):
     def wrapper(*args, **kwargs):
-        # rate limiting
         auth = request.headers.get("Authorization", "")
         token = auth.split(" ", 1)[1].strip() if auth.startswith("Bearer ") else ""
         payload = verify_token(token) if token else None
@@ -133,7 +131,6 @@ def token_required(fn):
         if not rate_limiter.allow(_rate_key(user)):
             return fail("Rate limit exceeded", 429)
 
-        # replay protection
         ok_nonce, msg = _require_nonce()
         if not ok_nonce:
             return fail(msg, 400)
@@ -179,7 +176,6 @@ def login():
         if not user or not pw:
             return fail("user_id/email and password are required", 400)
 
-        # verify identity + password
         _key, _cert, _cas = HSM.load_identity(user, pw, KEYSTORE_DIR)
 
         token = generate_token(user)
@@ -187,7 +183,7 @@ def login():
         return ok({"message": "LOGIN_OK", "user_id": user, "token": token}, 200)
     except FileNotFoundError:
         return fail("Identity not found. Please register first.", 401)
-    except ValueError as e:
+    except ValueError:
         return fail("Invalid username or password", 401)
     except Exception as e:
         logger.exception("Login failed")
@@ -202,15 +198,20 @@ def files():
         if not user:
             return fail("token subject missing", 401)
 
-        if db is None:
-            return ok({"files": []})
+       
+        if db is not None:
+            docs = list(
+                db.files.find(
+                    {"owner": user},
+                    {"_id": 0, "filename": 1, "file_id": 1, "uploaded_at": 1, "size_bytes": 1, "mime_type": 1},
+                ).sort("uploaded_at", -1)
+            )
+            return ok({"files": docs})
 
-        docs = list(db.files.find(
-            {"owner": user},
-            {"_id": 0, "filename": 1, "file_id": 1, "uploaded_at": 1, "size_bytes": 1, "mime_type": 1}
-        ).sort("uploaded_at", -1))
-
+       
+        docs = VaultStore.list_files_for_owner(BASE_STORAGE, user)
         return ok({"files": docs})
+
     except Exception as e:
         logger.exception("Files failed")
         return fail(f"files failed: {e}", 500)
@@ -222,7 +223,7 @@ def upload():
     try:
         f = _file_obj()
         user = getattr(request, "user_id", "")
-        pw = _password()  # still required to unlock PKCS#12 (private key)
+        pw = _password()
         if not f or not user or not pw:
             return fail("file and password required (token user is used)", 400)
 
@@ -231,40 +232,65 @@ def upload():
         mime_type = f.mimetype or "application/octet-stream"
         uploaded_at = datetime.now(timezone.utc).isoformat()
 
-        # validate identity (also enforces cert expiry/revocation)
+        # validate identity
         _ = HSM.load_identity(user, pw, KEYSTORE_DIR)
 
-        # sign plaintext (integrity)
+        # sign plaintext
         sig = Signer.sign_data(raw, user, pw, KEYSTORE_DIR)
 
-        # encrypt plaintext (confidentiality)
+        # encrypt plaintext
         bundle = HybridCipher.encrypt_data(raw, user, pw, KEYSTORE_DIR)
 
         # store encrypted bundle to disk
         file_id = VaultStore.new_file_id()
-        VaultStore.save_bundle(BASE_STORAGE, file_id, bundle)
+        bundle_path = VaultStore.save_bundle(BASE_STORAGE, file_id, bundle)
 
-        # store metadata in mongo (if available)
-        if db is not None:
-            db.files.insert_one({
+        # hash the stored encrypted bundle
+        bundle_hash = VaultStore.sha256_file(bundle_path)
+
+        # store disk metadata (CI fallback)
+        VaultStore.save_metadata(
+            BASE_STORAGE,
+            file_id,
+            {
                 "file_id": file_id,
                 "filename": f.filename,
                 "owner": user,
                 "signature": sig.hex(),
                 "uploaded_at": uploaded_at,
                 "size_bytes": size_bytes,
-                "mime_type": mime_type
-            })
+                "mime_type": mime_type,
+                "bundle_hash": bundle_hash,
+            },
+        )
+
+        # store metadata in mongo (if available)
+        if db is not None:
+            db.files.insert_one(
+                {
+                    "file_id": file_id,
+                    "filename": f.filename,
+                    "owner": user,
+                    "signature": sig.hex(),
+                    "uploaded_at": uploaded_at,
+                    "size_bytes": size_bytes,
+                    "mime_type": mime_type,
+                    "bundle_hash": bundle_hash,
+                }
+            )
 
         audit("UPLOAD", user, {"file_id": file_id, "filename": f.filename, "size_bytes": size_bytes})
-        return ok({
-            "status": "ENCRYPTED_STORED",
-            "file_id": file_id,
-            "filename": f.filename,
-            "uploaded_at": uploaded_at,
-            "size_bytes": size_bytes,
-            "mime_type": mime_type
-        }, 201)
+        return ok(
+            {
+                "status": "ENCRYPTED_STORED",
+                "file_id": file_id,
+                "filename": f.filename,
+                "uploaded_at": uploaded_at,
+                "size_bytes": size_bytes,
+                "mime_type": mime_type,
+            },
+            201,
+        )
 
     except Exception as e:
         logger.exception("Upload failed")
@@ -280,18 +306,33 @@ def decrypt_download(file_id):
         if not user or not pw:
             return fail("password required to decrypt", 400)
 
-        if db is None:
-            return fail("database not available", 500)
+        if db is not None:
+            meta = db.files.find_one(
+                {"file_id": file_id, "owner": user},
+                {"_id": 0, "filename": 1, "signature": 1, "owner": 1, "bundle_hash": 1},
+            )
+        else:
+            meta = VaultStore.load_metadata(BASE_STORAGE, file_id)
+            if meta.get("owner") != user:
+                return fail("file not found for this user", 404)
 
-        meta = db.files.find_one({"file_id": file_id, "owner": user}, {"_id": 0, "filename": 1, "signature": 1})
         if not meta:
             return fail("file not found for this user", 404)
+
+        # bundle hash check before decrypt (storage integrity)
+        bundle_path = VaultStore.bundle_path(BASE_STORAGE, file_id)
+        expected_hash = (meta.get("bundle_hash") or "").strip()
+        if expected_hash:
+            actual_hash = VaultStore.sha256_file(bundle_path)
+            if actual_hash != expected_hash:
+                audit("BUNDLE_TAMPER", user, {"file_id": file_id})
+                return fail("Encrypted bundle integrity check failed.", 409)
 
         bundle = VaultStore.load_bundle(BASE_STORAGE, file_id)
         plaintext = HybridCipher.decrypt_data(bundle, user, pw, KEYSTORE_DIR)
 
-        # Integrity enforcement: verify stored signature against decrypted plaintext
-        sig_hex = meta.get("signature", "")
+        # signature verify
+        sig_hex = (meta.get("signature") or "").strip()
         if not sig_hex:
             return fail("missing signature metadata", 500)
 
@@ -302,9 +343,16 @@ def decrypt_download(file_id):
 
         audit("DECRYPT", user, {"file_id": file_id})
         filename = meta.get("filename", "decrypted_file")
-        return send_file(io.BytesIO(plaintext), as_attachment=True, download_name=filename,
-                         mimetype="application/octet-stream")
 
+        return send_file(
+            io.BytesIO(plaintext),
+            as_attachment=True,
+            download_name=filename,
+            mimetype="application/octet-stream",
+        )
+
+    except FileNotFoundError:
+        return fail("file not found", 404)
     except Exception as e:
         logger.exception("Decryption failed")
         return fail(f"decryption failed: {e}", 500)
@@ -318,18 +366,22 @@ def delete_file(file_id):
         if not user:
             return fail("token subject missing", 401)
 
-        if db is None:
-            return fail("database not available", 500)
+        if db is not None:
+            meta = db.files.find_one({"file_id": file_id, "owner": user}, {"_id": 0})
+            if not meta:
+                return fail("file not found for this user", 404)
+            db.files.delete_one({"file_id": file_id, "owner": user})
+        else:
+            meta = VaultStore.load_metadata(BASE_STORAGE, file_id)
+            if meta.get("owner") != user:
+                return fail("file not found for this user", 404)
 
-        meta = db.files.find_one({"file_id": file_id, "owner": user}, {"_id": 0})
-        if not meta:
-            return fail("file not found for this user", 404)
-
-        db.files.delete_one({"file_id": file_id, "owner": user})
         VaultStore.delete_bundle(BASE_STORAGE, file_id)
-
         audit("DELETE", user, {"file_id": file_id})
         return ok({"status": "DELETED", "file_id": file_id})
+
+    except FileNotFoundError:
+        return fail("file not found", 404)
     except Exception as e:
         logger.exception("Delete failed")
         return fail(f"delete failed: {e}", 500)
@@ -377,8 +429,6 @@ def verify():
         return fail(f"verify failed: {e}", 500)
 
 
-# Demo/admin endpoint: revoke a user cert (coursework proof of lifecycle)
-# Protect with a simple admin token env variable.
 @secure_bp.route("/admin/revoke", methods=["POST"])
 def admin_revoke():
     try:
