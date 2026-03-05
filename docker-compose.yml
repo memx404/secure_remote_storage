@@ -1,6 +1,33 @@
 version: "3.8"
 
 services:
+  services:
+
+  cert-generator:
+    image: alpine:3.20
+    container_name: srs_cert_gen
+    volumes:
+      - ./nginx/certs:/certs
+    command: >
+      sh -c "
+      if [ ! -f /certs/server.crt ]; then
+        echo 'Generating self-signed TLS certificates...';
+        apk add --no-cache openssl;
+        openssl req -x509 -nodes -days 365 \
+          -newkey rsa:2048 \
+          -keyout /certs/server.key \
+          -out /certs/server.crt \
+          -subj '/CN=localhost';
+      else
+        echo 'TLS certificates already exist.';
+      fi
+      "
+
+  web:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+      
   # 1) DATABASE
   mongo:
     image: mongo:latest
