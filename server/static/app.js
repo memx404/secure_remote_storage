@@ -9,11 +9,11 @@ let currentUser = null;
 let currentPass = null;
 
 function newNonce() {
-  return crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + "-" + Math.random();
+  return crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
 }
 
 function authHeaders(extra = {}) {
-  const h = { ...extra, "X-Request-Id": newNonce() }; // replay protection
+  const h = { ...extra, "X-Request-Id": newNonce() };
   if (sessionToken) h["Authorization"] = `Bearer ${sessionToken}`;
   return h;
 }
@@ -70,6 +70,9 @@ function switchAuthTab(mode) {
   $("registerForm")?.classList.toggle("hidden", mode !== "register");
   $("tabLogin")?.classList.toggle("active", mode === "login");
   $("tabRegister")?.classList.toggle("active", mode === "register");
+
+  safeText($("loginStatus"), "");
+  safeText($("regStatus"), "");
 }
 
 function switchMainTab(mode) {
@@ -83,9 +86,10 @@ function switchMainTab(mode) {
    Auth Guards
 -------------------------- */
 function requireLogin() {
-  // Token required for protected endpoints
   if (!sessionToken || !currentUser || !currentPass) {
-    alert("Login first.");
+    safeText($("loginStatus"), "❌ Login first.", "#dc2626");
+    showAuth();
+    switchAuthTab("login");
     return false;
   }
   return true;
@@ -101,7 +105,7 @@ function logout() {
   if ($("verifyResult")) $("verifyResult").style.display = "none";
   if ($("sigOutput")) $("sigOutput").value = "";
 
-  ["loginUser", "loginPass", "regUser", "regPass", "verifySig"].forEach(id => {
+  ["loginUser", "loginPass", "regUser", "regPass", "verifySig"].forEach((id) => {
     if ($(id)) $(id).value = "";
   });
 
@@ -125,7 +129,7 @@ async function postJson(path, obj) {
 async function postForm(path, formData) {
   const res = await fetch(`${API_BASE}${path}`, {
     method: "POST",
-    headers: authHeaders(), // includes token + nonce
+    headers: authHeaders(),
     body: formData
   });
 
@@ -138,7 +142,7 @@ async function postForm(path, formData) {
 }
 
 /* -------------------------
-   Register (PKI Identity)
+   Register
 -------------------------- */
 async function register() {
   const user = $("regUser")?.value?.trim();
@@ -163,30 +167,38 @@ async function register() {
 }
 
 /* -------------------------
-   Login (JWT + PKCS12 unlock)
+   Login
 -------------------------- */
 async function login() {
   const u = $("loginUser")?.value?.trim();
   const p = $("loginPass")?.value || "";
+  const statusEl = $("loginStatus");
 
   if (!u || !p) {
-    alert("Enter email/user_id and password");
+    safeText(statusEl, "❌ Enter user_id/email and password", "#dc2626");
     return;
   }
 
-  const statusEl = $("loginStatus");
   safeText(statusEl, "Checking credentials...", "#0f172a");
 
   try {
-    // login route returns { ok:true, token:"..." }
     const res = await fetch(`${API_BASE}/login`, {
       method: "POST",
       headers: authHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ user_id: u, password: p })
     });
 
-    const data = await res.json().catch(() => ({}));
+    let data = {};
+    const ct = (res.headers.get("content-type") || "").toLowerCase();
 
+    if (ct.includes("application/json")) {
+      data = await res.json().catch(() => ({}));
+    } else {
+      const txt = await res.text().catch(() => "");
+      data = { error: txt || "Login failed" };
+    }
+
+    // ✅ Success
     if (res.ok && data.ok && data.token) {
       sessionToken = data.token;
       currentUser = u;
@@ -200,9 +212,10 @@ async function login() {
       return;
     }
 
-    const msg = data.error || "Login failed";
+    const msg = data.error || "Invalid username or password";
     safeText(statusEl, `❌ ${msg}`, "#dc2626");
     if ($("loginPass")) $("loginPass").value = "";
+
   } catch (err) {
     console.error(err);
     safeText(statusEl, "❌ Network/server error during login.", "#dc2626");
@@ -223,7 +236,7 @@ async function uploadFile() {
 
   const fd = new FormData();
   fd.append("file", file);
-  fd.append("password", currentPass); // token supplies user, password unlocks PKCS12
+  fd.append("password", currentPass);
 
   const { res, data } = await postForm("/upload", fd);
 
@@ -244,7 +257,7 @@ async function loadFiles() {
 
   list.innerHTML = `<div style="padding: 2rem; text-align: center; color: #cbd5e1;">Loading secure files...</div>`;
 
-  const { res, data } = await postJson("/files", {}); // token supplies user
+  const { res, data } = await postJson("/files", {});
 
   if (!res.ok || !data.ok) {
     list.innerHTML = `<div style="padding: 2rem; text-align: center; color: #dc2626; font-weight: 700;">Failed to load files</div>`;
@@ -295,7 +308,7 @@ async function loadFiles() {
 
 async function decryptDownload(fileId, fname) {
   if (!requireLogin()) return;
-  if (!fileId) return alert("Missing file id.");
+  if (!fileId) return safeText($("uploadStatus"), "❌ Missing file id.", "#dc2626");
 
   const status = $("uploadStatus");
   safeText(status, "Decrypting...", "#0f172a");
@@ -331,7 +344,7 @@ async function decryptDownload(fileId, fname) {
 
 async function deleteVaultFile(fileId, fname) {
   if (!requireLogin()) return;
-  if (!fileId) return alert("Missing file id.");
+  if (!fileId) return safeText($("uploadStatus"), "❌ Missing file id.", "#dc2626");
 
   const sure = confirm(`Delete "${fname}"?\nThis cannot be undone.`);
   if (!sure) return;
@@ -353,7 +366,7 @@ async function deleteVaultFile(fileId, fname) {
 }
 
 /* -------------------------
-   Digital Signatures UI
+   Digital Signatures
 -------------------------- */
 async function signFile() {
   if (!requireLogin()) return;
@@ -403,9 +416,7 @@ async function verifyFile() {
   }
 }
 
-/* -------------------------
-   Expose to HTML
--------------------------- */
+/* Expose */
 window.showLanding = showLanding;
 window.showAuth = showAuth;
 window.switchAuthTab = switchAuthTab;
@@ -423,7 +434,6 @@ window.deleteVaultFile = deleteVaultFile;
 window.signFile = signFile;
 window.verifyFile = verifyFile;
 
-/* Init */
 document.addEventListener("DOMContentLoaded", () => {
   showLanding();
 });
