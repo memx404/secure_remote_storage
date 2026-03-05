@@ -186,9 +186,9 @@ def login():
         audit("LOGIN", user)
         return ok({"message": "LOGIN_OK", "user_id": user, "token": token}, 200)
     except FileNotFoundError:
-        return fail("Identity not found. Please register first.", 404)
+        return fail("Identity not found. Please register first.", 401)
     except ValueError as e:
-        return fail(str(e), 401)
+        return fail("Invalid username or password", 401)
     except Exception as e:
         logger.exception("Login failed")
         return fail(f"login failed: {e}", 500)
